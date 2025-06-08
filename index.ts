@@ -1,6 +1,6 @@
-const express = require('express');
-const fs = require('fs');
-const path = require('path');
+import express, { Request, Response } from 'express';
+import fs from 'fs';
+import path from 'path';
 
 const app = express();
 const port = 3000;
@@ -33,11 +33,16 @@ const { publicDir } = ensureDirectoriesAndFiles();
 
 app.use(express.static(publicDir));
 
-app.use('/uploadSFX', require('./routes/uploadSFX'));
-app.use('/getSFXbyID', require('./routes/getSFXbyID'));
-app.use('/getSFXlist', require('./routes/getSFXlist'));
+// Import routes as TypeScript modules
+import uploadSFXRouter from './routes/uploadSFX';
+import getSFXbyIDRouter from './routes/getSFXbyID';
+import getSFXlistRouter from './routes/getSFXlist';
 
-app.get('/', (req, res) => {
+app.use('/uploadSFX', uploadSFXRouter);
+app.use('/getSFXbyID', getSFXbyIDRouter);
+app.use('/getSFXlist', getSFXlistRouter);
+
+app.get('/', (req: Request, res: Response) => {
     res.send("Server is running!");
 });
 
