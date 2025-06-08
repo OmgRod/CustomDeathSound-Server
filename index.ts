@@ -33,7 +33,6 @@ const { publicDir } = ensureDirectoriesAndFiles();
 
 app.use(express.static(publicDir));
 
-// Import routes as TypeScript modules
 import uploadSFXRouter from './routes/uploadSFX';
 import getSFXbyIDRouter from './routes/getSFXbyID';
 import getSFXlistRouter from './routes/getSFXlist';
