@@ -3,23 +3,51 @@ import { JSONFile } from 'lowdb/node';
 import path from 'path';
 
 export interface SFX {
-  [key: string]: any;
+  id: number;
+  name: string;
+  url: string;
+  downloads: number;
+  // likes: number;
+  // dislikes: number;
 }
 
-export interface DBSchema {
+export interface SFXDBSchema {
   sfx: SFX[];
 }
 
-const file = path.join(__dirname, '../db/sfx.json');
-const adapter = new JSONFile<DBSchema>(file);
-const db = new Low<DBSchema>(adapter, { sfx: [] });
+export interface Packs {
+  id: number;
+  name: string;
+  ids: number[];
+  downloads: number;
+  // likes: number;
+  // dislikes: number;
+}
+
+export interface PackDBSchema {
+  packs: Packs[];
+}
+
+const sfxFile = path.join(__dirname, '../db/sfx.json');
+const sfxAdapter = new JSONFile<SFXDBSchema>(sfxFile);
+const sfxDB = new Low<SFXDBSchema>(sfxAdapter, { sfx: [] });
+
+const packsFile = path.join(__dirname, '../db/sfx.json');
+const packsAdapter = new JSONFile<PackDBSchema>(packsFile);
+const packsDB = new Low<PackDBSchema>(packsAdapter, { packs: [] });
 
 export async function initDB() {
-  await db.read();
-  if (!db.data) {
-    db.data = { sfx: [] };
-    await db.write();
+  await sfxDB.read();
+  if (!sfxDB.data) {
+    sfxDB.data = { sfx: [] };
+    await sfxDB.write();
+  }
+
+  await packsDB.read();
+  if (!packsDB.data) {
+    packsDB.data = { packs: [] };
+    await packsDB.write();
   }
 }
 
-export { db };
+export { sfxDB, packsDB };

@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import multer from 'multer';
 import path from 'path';
-import { db } from '../db';
+import { sfxDB } from '../db';
 import { asyncHandler } from '../utils/asyncHandler';
 
 const router = Router();
@@ -23,8 +23,8 @@ router.post(
   upload.single('file'),
   asyncHandler(async (req: Request, res: Response) => {
     console.log('Reading DB...');
-    await db.read();
-    console.log('DB Data before:', db.data);
+    await sfxDB.read();
+    console.log('DB Data before:', sfxDB.data);
 
     const { name } = req.body;
     const file = req.file;
@@ -33,8 +33,8 @@ router.post(
       return res.status(400).json({ error: 'Missing required fields: name and file' });
     }
 
-    if (!db.data) db.data = { sfx: [] };
-    if (!db.data.sfx) db.data.sfx = [];
+    if (!sfxDB.data) sfxDB.data = { sfx: [] };
+    if (!sfxDB.data.sfx) sfxDB.data.sfx = [];
 
     const newSfx = {
       id: Date.now(),
@@ -45,10 +45,10 @@ router.post(
       // dislikes: 0
     };
 
-    db.data.sfx.push(newSfx);
+    sfxDB.data.sfx.push(newSfx);
 
-    await db.write();
-    console.log('DB written to disk.');
+    await sfxDB.write();
+    console.log('SFX DB written to disk.');
 
     res.status(201).json({ message: 'SFX uploaded successfully', sfx: newSfx });
   })
