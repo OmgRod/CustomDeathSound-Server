@@ -3,7 +3,7 @@ import { JSONFile } from 'lowdb/node';
 import path from 'path';
 
 export interface SFX {
-  id: number;
+  id: string;
   name: string;
   url: string;
   downloads: number;
@@ -18,7 +18,7 @@ export interface SFXDBSchema {
 export interface Packs {
   id: number;
   name: string;
-  ids: number[];
+  ids: string[];
   downloads: number;
   // likes: number;
   // dislikes: number;

@@ -3,16 +3,23 @@ import multer from 'multer';
 import path from 'path';
 import { sfxDB } from '../db';
 import { asyncHandler } from '../utils/asyncHandler';
+import { v4 as uuidv4 } from 'uuid';
 
 const router = Router();
+
+router.use((req, res, next) => {
+  (req as any).sfxId = uuidv4();
+  next();
+});
 
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
     cb(null, path.join(__dirname, '../../public/sounds'));
   },
   filename: (req, file, cb) => {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
-    cb(null, `${uniqueSuffix}-${file.originalname}`);
+    const sfxId = (req as any).sfxId;
+    const sanitizedName = file.originalname.replace(/[^a-zA-Z0-9.\-_]/g, '_');
+    cb(null, `${sfxId}-${sanitizedName}`);
   },
 });
 
@@ -28,6 +35,7 @@ router.post(
 
     const { name } = req.body;
     const file = req.file;
+    const sfxId = (req as any).sfxId;
 
     if (!name || !file) {
       return res.status(400).json({ error: 'Missing required fields: name and file' });
@@ -37,7 +45,7 @@ router.post(
     if (!sfxDB.data.sfx) sfxDB.data.sfx = [];
 
     const newSfx = {
-      id: Date.now(),
+      id: sfxId,
       name,
       url: `/sounds/${file.filename}`,
       downloads: 0,
