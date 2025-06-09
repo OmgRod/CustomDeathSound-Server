@@ -1,5 +1,6 @@
 import express, { Request, Response, NextFunction } from 'express';
 import path from 'path';
+import sanitizeFilename from 'sanitize-filename';
 import { sfxDB } from '../db';
 import { asyncHandler } from './asyncHandler';
 import rateLimit from 'express-rate-limit';
@@ -13,7 +14,13 @@ const soundsRateLimiter = rateLimit({
 });
 
 soundsRouter.get('/sounds/:filename', soundsRateLimiter, asyncHandler(async (req, res, next) => {
-  const { filename } = req.params;
+  let { filename } = req.params;
+  filename = sanitizeFilename(filename);
+  if (!filename) {
+    console.warn('Invalid filename provided:', req.params.filename);
+    res.status(400).send('Invalid filename');
+    return;
+  }
   console.log(`Requested file: ${filename}`);
 
   await sfxDB.read();
