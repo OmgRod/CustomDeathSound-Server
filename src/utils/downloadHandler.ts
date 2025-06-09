@@ -1,7 +1,7 @@
 import express, { Request, Response, NextFunction } from 'express';
 import path from 'path';
 import { sfxDB } from '../db';
-import { asyncHandler } from '../utils/asyncHandler';
+import { asyncHandler } from './asyncHandler';
 
 const soundsRouter = express.Router();
 

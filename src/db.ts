@@ -16,7 +16,7 @@ export interface SFXDBSchema {
 }
 
 export interface Packs {
-  id: number;
+  id: string;
   name: string;
   ids: string[];
   downloads: number;
@@ -32,7 +32,7 @@ const sfxFile = path.join(__dirname, '../db/sfx.json');
 const sfxAdapter = new JSONFile<SFXDBSchema>(sfxFile);
 const sfxDB = new Low<SFXDBSchema>(sfxAdapter, { sfx: [] });
 
-const packsFile = path.join(__dirname, '../db/sfx.json');
+const packsFile = path.join(__dirname, '../db/packs.json');
 const packsAdapter = new JSONFile<PackDBSchema>(packsFile);
 const packsDB = new Low<PackDBSchema>(packsAdapter, { packs: [] });
 

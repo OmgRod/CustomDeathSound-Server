@@ -36,7 +36,7 @@ async function startServer() {
   const app = express();
   const port = 3000;
 
-  const downloadHandler = (await import("./routes/downloadHandler")).default;
+  const downloadHandler = (await import("./utils/downloadHandler")).default;
   app.use(downloadHandler);
 
   app.use(express.json());

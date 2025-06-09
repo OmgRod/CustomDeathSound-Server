@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { asyncHandler } from '../utils/asyncHandler';
 import { packsDB, sfxDB } from '../db';
+import { v4 as uuidv4 } from 'uuid';
 
 const router = Router();
 
@@ -28,7 +29,7 @@ router.post(
     }
 
     const newPack = {
-      id: Date.now(),
+      id: uuidv4(),
       name,
       ids,
       downloads: 0,
