@@ -4,6 +4,7 @@ import path from 'path';
 import { sfxDB } from '../db';
 import { asyncHandler } from '../utils/asyncHandler';
 import { v4 as uuidv4 } from 'uuid';
+import rateLimiter from '../utils/rateLimiter';
 
 const router = Router();
 
@@ -27,6 +28,7 @@ const upload = multer({ storage });
 
 router.post(
   '/',
+  rateLimiter,
   upload.single('file'),
   asyncHandler(async (req: Request, res: Response) => {
     console.log('Reading DB...');

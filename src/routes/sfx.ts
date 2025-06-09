@@ -1,10 +1,11 @@
 import express, { Request, Response } from 'express';
 import { sfxDB } from '../db';
 import { asyncHandler } from '../utils/asyncHandler';
+import rateLimiter from '../utils/rateLimiter';
 
 const router = express.Router();
 
-router.get('/:sfxID', asyncHandler(async (req: Request, res: Response) => {
+router.get('/:sfxID', rateLimiter, asyncHandler(async (req: Request, res: Response) => {
     const { sfxID } = req.params;
 
     await sfxDB.read();

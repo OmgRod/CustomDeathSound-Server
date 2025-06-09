@@ -2,11 +2,13 @@ import { Router, Request, Response } from 'express';
 import { asyncHandler } from '../utils/asyncHandler';
 import { packsDB, sfxDB } from '../db';
 import { v4 as uuidv4 } from 'uuid';
+import rateLimiter from '../utils/rateLimiter';
 
 const router = Router();
 
 router.post(
   '/',
+  rateLimiter,
   asyncHandler(async (req: Request, res: Response) => {
     console.log('Reading Pack DB...');
     await packsDB.read();

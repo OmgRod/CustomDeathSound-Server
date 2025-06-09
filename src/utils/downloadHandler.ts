@@ -3,21 +3,11 @@ import path from 'path';
 import sanitizeFilename from 'sanitize-filename';
 import { sfxDB } from '../db';
 import { asyncHandler } from './asyncHandler';
-import rateLimit from 'express-rate-limit';
+import rateLimiter from './rateLimiter';
 
 const soundsRouter = express.Router();
 
-const soundsRateLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // max 100 requests per windowMs
-  standardHeaders: true,
-  legacyHeaders: false,
-  handler: (req, res) => {
-    res.status(429).json({ error: 'Too many requests, please try again later.' });
-  },
-});
-
-soundsRouter.get('/sounds/:filename', soundsRateLimiter, asyncHandler(async (req, res, next) => {
+soundsRouter.get('/sounds/:filename', rateLimiter, asyncHandler(async (req, res, next) => {
   let { filename } = req.params;
   filename = sanitizeFilename(filename);
   if (!filename) {
