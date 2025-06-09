@@ -43,17 +43,17 @@ async function startServer() {
   app.use(express.static(path.join(__dirname, "../public")));
 
   const uploadSFXRouter = (await import("./routes/uploadSFX")).default;
-  const getSFXbyIDRouter = (await import("./routes/getSFXbyID")).default;
+  const getSFXbyIDRouter = (await import("./routes/sfx")).default;
   const getSFXlistRouter = (await import("./routes/getSFXlist")).default;
   const uploadPackRouter = (await import("./routes/uploadPack")).default;
-  const getPackByIDRouter = (await import("./routes/getPackByID")).default;
+  const getPackByIDRouter = (await import("./routes/pack")).default;
   const getPackslistRouter = (await import("./routes/getPacksList")).default;
 
   app.use("/uploadSFX", uploadSFXRouter);
-  app.use("/getSFXbyID", getSFXbyIDRouter);
+  app.use("/sfx", getSFXbyIDRouter);
   app.use("/getSFXlist", getSFXlistRouter);
   app.use("/uploadPack", uploadPackRouter);
-  app.use("/getPackByID", getPackByIDRouter);
+  app.use("/pack", getPackByIDRouter);
   app.use("/getPacksList", getPackslistRouter);
 
   app.get("/", (req: Request, res: Response) => {
