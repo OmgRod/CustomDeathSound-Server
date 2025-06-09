@@ -22,7 +22,9 @@ router.post(
   '/',
   upload.single('file'),
   asyncHandler(async (req: Request, res: Response) => {
+    console.log('Reading DB...');
     await db.read();
+    console.log('DB Data before:', db.data);
 
     const { name } = req.body;
     const file = req.file;
@@ -38,10 +40,15 @@ router.post(
       id: Date.now(),
       name,
       url: `/sounds/${file.filename}`,
+      downloads: 0,
+      // likes: 0,
+      // dislikes: 0
     };
 
     db.data.sfx.push(newSfx);
+
     await db.write();
+    console.log('DB written to disk.');
 
     res.status(201).json({ message: 'SFX uploaded successfully', sfx: newSfx });
   })

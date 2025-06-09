@@ -1,50 +1,68 @@
-import express, { Request, Response } from 'express';
-import fs from 'fs';
-import path from 'path';
+import express, { Request, Response } from "express";
+import fs from "fs";
+import path from "path";
+import { initDB } from "./db";
 
-const app = express();
-const port = 3000;
+async function ensureDirectoriesAndFiles() {
+  const publicDir = path.join(__dirname, "../public");
+  const soundsDir = path.join(publicDir, "sounds");
+  const dbDir = path.join(__dirname, "../db");
+  const sfxJsonPath = path.join(dbDir, "sfx.json");
+  const packsJsonPath = path.join(dbDir, "packs.json");
 
-app.use(express.json());
+  if (!fs.existsSync(publicDir)) {
+    fs.mkdirSync(publicDir);
+  }
+  if (!fs.existsSync(soundsDir)) {
+    fs.mkdirSync(soundsDir);
+  }
+  if (!fs.existsSync(dbDir)) {
+    fs.mkdirSync(dbDir);
+  }
+  if (!fs.existsSync(sfxJsonPath)) {
+    fs.writeFileSync(sfxJsonPath, JSON.stringify({ sfx: [] }, null, 2));
+  }
+  if (!fs.existsSync(packsJsonPath)) {
+    fs.writeFileSync(packsJsonPath, JSON.stringify({ packs: [] }, null, 2));
+  }
 
-function ensureDirectoriesAndFiles() {
-    const publicDir = path.join(__dirname, '../public');
-    const soundsDir = path.join(publicDir, 'sounds');
-    const dbDir = path.join(__dirname, '../db');
-    const sfxJsonPath = path.join(dbDir, 'sfx.json');
-
-    if (!fs.existsSync(publicDir)) {
-        fs.mkdirSync(publicDir);
-    }
-    if (!fs.existsSync(soundsDir)) {
-        fs.mkdirSync(soundsDir);
-    }
-    if (!fs.existsSync(dbDir)) {
-        fs.mkdirSync(dbDir);
-    }
-    if (!fs.existsSync(sfxJsonPath)) {
-        fs.writeFileSync(sfxJsonPath, JSON.stringify([]));
-    }
-
-    return { publicDir, soundsDir, dbDir, sfxJsonPath };
+  return { publicDir, soundsDir, dbDir, sfxJsonPath, packsJsonPath };
 }
 
-const { publicDir } = ensureDirectoriesAndFiles();
+async function startServer() {
+  await ensureDirectoriesAndFiles();
+  await initDB();
 
-app.use(express.static(publicDir));
+  const app = express();
+  const port = 3000;
 
-import uploadSFXRouter from './routes/uploadSFX';
-import getSFXbyIDRouter from './routes/getSFXbyID';
-import getSFXlistRouter from './routes/getSFXlist';
+  app.use(express.json());
+  app.use(express.static(path.join(__dirname, "../public")));
 
-app.use('/uploadSFX', uploadSFXRouter);
-app.use('/getSFXbyID', getSFXbyIDRouter);
-app.use('/getSFXlist', getSFXlistRouter);
+  const uploadSFXRouter = (await import("./routes/uploadSFX")).default;
+  const getSFXbyIDRouter = (await import("./routes/getSFXbyID")).default;
+  const getSFXlistRouter = (await import("./routes/getSFXlist")).default;
+  const uploadPackRouter = (await import("./routes/uploadPack")).default;
+  const getPackByIDRouter = (await import("./routes/getPackByID")).default;
+  const getPackslistRouter = (await import("./routes/getPacksList")).default;
 
-app.get('/', (req: Request, res: Response) => {
+  app.use("/uploadSFX", uploadSFXRouter);
+  app.use("/getSFXbyID", getSFXbyIDRouter);
+  app.use("/getSFXlist", getSFXlistRouter);
+  app.use("/uploadPack", uploadPackRouter);
+  app.use("/getPackByID", getPackByIDRouter);
+  app.use("/getPacksList", getPackslistRouter);
+
+  app.get("/", (req: Request, res: Response) => {
     res.send("Server is running!");
-});
+  });
 
-app.listen(port, () => {
+  app.listen(port, () => {
     console.log(`Server is running on http://localhost:${port}`);
+  });
+}
+
+startServer().catch((err) => {
+  console.error("Failed to start server:", err);
+  process.exit(1);
 });
