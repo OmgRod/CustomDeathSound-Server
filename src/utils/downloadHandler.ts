@@ -7,7 +7,7 @@ import rateLimiter from './rateLimiter';
 
 const soundsRouter = express.Router();
 
-soundsRouter.get('/sounds/:filename', rateLimiter, asyncHandler(async (req, res, next) => {
+soundsRouter.get('/sounds/:filename', rateLimiter(15, 100), asyncHandler(async (req, res, next) => {
   let { filename } = req.params;
   filename = sanitizeFilename(filename);
   if (!filename) {

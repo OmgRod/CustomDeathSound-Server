@@ -1,13 +1,17 @@
 import { rateLimit } from 'express-rate-limit';
 
-const rateLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // max 100 requests per windowMs
-  standardHeaders: true,
-  legacyHeaders: false,
-  handler: (req, res) => {
-    res.status(429).json({ error: 'Too many requests, please try again later.' });
-  },
-});
+function rateLimiter(minutes: number, amount: number) {
+    const rl = rateLimit({
+        windowMs: minutes * 60 * 1000,
+        max: amount,
+        standardHeaders: true,
+        legacyHeaders: false,
+        handler: (req, res) => {
+            res.status(429).json({ error: 'Too many requests, please try again later.' });
+        },
+    });
+
+    return rl;
+}
 
 export default rateLimiter;

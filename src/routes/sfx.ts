@@ -5,7 +5,7 @@ import rateLimiter from '../utils/rateLimiter';
 
 const router = express.Router();
 
-router.get('/:sfxID', rateLimiter, asyncHandler(async (req: Request, res: Response) => {
+router.get('/:sfxID', rateLimiter(15, 100), asyncHandler(async (req: Request, res: Response) => {
     const { sfxID } = req.params;
 
     await sfxDB.read();

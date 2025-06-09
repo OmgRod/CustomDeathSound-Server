@@ -8,7 +8,7 @@ const router = Router();
 
 router.post(
   '/',
-  rateLimiter,
+  rateLimiter(15, 100),
   asyncHandler(async (req: Request, res: Response) => {
     console.log('Reading Pack DB...');
     await packsDB.read();

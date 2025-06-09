@@ -28,7 +28,7 @@ const upload = multer({ storage });
 
 router.post(
   '/',
-  rateLimiter,
+  rateLimiter(15, 100),
   upload.single('file'),
   asyncHandler(async (req: Request, res: Response) => {
     console.log('Reading DB...');

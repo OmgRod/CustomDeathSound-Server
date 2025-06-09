@@ -3,7 +3,7 @@ import rateLimiter from '../utils/rateLimiter';
 
 const router = express.Router();
 
-router.get('/', rateLimiter, (req: Request, res: Response) => {
+router.get('/', rateLimiter(15, 100), (req: Request, res: Response) => {
     res.json({ message: 'Get Packs list route is working!' });
 });
 

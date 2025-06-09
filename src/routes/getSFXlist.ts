@@ -7,7 +7,7 @@ const router = express.Router();
 
 router.get(
   '/',
-  rateLimiter,
+  rateLimiter(15, 100),
   asyncHandler(async (req: Request, res: Response) => {
     const page = parseInt(req.query.page as string, 10) || 1;
     const pageSize = 15;
