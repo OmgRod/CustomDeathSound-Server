@@ -37,6 +37,7 @@ router.post(
       downloads: 0,
       // likes: 0,
       // dislikes: 0
+      createdAt: Date.now(),
     };
 
     packsDB.data.packs.push(newPack);

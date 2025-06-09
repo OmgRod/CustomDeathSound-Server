@@ -9,6 +9,7 @@ export interface SFX {
   downloads: number;
   // likes: number;
   // dislikes: number;
+  createdAt: number;
 }
 
 export interface SFXDBSchema {
@@ -22,6 +23,7 @@ export interface Packs {
   downloads: number;
   // likes: number;
   // dislikes: number;
+  createdAt: number;
 }
 
 export interface PackDBSchema {
