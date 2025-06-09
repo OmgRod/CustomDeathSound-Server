@@ -1,8 +1,8 @@
 import { Router, Request, Response } from 'express';
 import multer from 'multer';
 import path from 'path';
-import { db } from '../src/db';
-import { asyncHandler } from '../src/utils/asyncHandler';
+import { db } from '../db';
+import { asyncHandler } from '../utils/asyncHandler';
 
 const router = Router();
 

@@ -33,9 +33,9 @@ const { publicDir } = ensureDirectoriesAndFiles();
 
 app.use(express.static(publicDir));
 
-import uploadSFXRouter from '../routes/uploadSFX';
-import getSFXbyIDRouter from '../routes/getSFXbyID';
-import getSFXlistRouter from '../routes/getSFXlist';
+import uploadSFXRouter from './routes/uploadSFX';
+import getSFXbyIDRouter from './routes/getSFXbyID';
+import getSFXlistRouter from './routes/getSFXlist';
 
 app.use('/uploadSFX', uploadSFXRouter);
 app.use('/getSFXbyID', getSFXbyIDRouter);
