@@ -6,10 +6,9 @@ import { asyncHandler } from '../utils/asyncHandler';
 
 const router = Router();
 
-// Set up multer storage
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    cb(null, path.join(__dirname, '../public/sounds'));
+    cb(null, path.join(__dirname, '../../public/sounds'));
   },
   filename: (req, file, cb) => {
     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
