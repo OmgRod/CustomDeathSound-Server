@@ -2,10 +2,17 @@ import express, { Request, Response, NextFunction } from 'express';
 import path from 'path';
 import { sfxDB } from '../db';
 import { asyncHandler } from './asyncHandler';
+import rateLimit from 'express-rate-limit';
 
 const soundsRouter = express.Router();
 
-soundsRouter.get('/sounds/:filename', asyncHandler(async (req, res, next) => {
+const soundsRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100, // max 100 requests per windowMs
+  message: 'Too many requests, please try again later.',
+});
+
+soundsRouter.get('/sounds/:filename', soundsRateLimiter, asyncHandler(async (req, res, next) => {
   const { filename } = req.params;
   console.log(`Requested file: ${filename}`);
 
