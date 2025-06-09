@@ -25,7 +25,7 @@ soundsRouter.get('/sounds/:filename', rateLimiter, asyncHandler(async (req, res,
   });
 
   if (entry) {
-    console.log('Found entry:', entry);
+    console.log('Found entry:', entry.id);
     entry.downloads = (entry.downloads ?? 0) + 1;
     await sfxDB.write();
     console.log(`Incremented downloads to: ${entry.downloads}`);
