@@ -8,9 +8,9 @@ const port = 3000;
 app.use(express.json());
 
 function ensureDirectoriesAndFiles() {
-    const publicDir = path.join(__dirname, 'public');
+    const publicDir = path.join(__dirname, '../public');
     const soundsDir = path.join(publicDir, 'sounds');
-    const dbDir = path.join(__dirname, 'db');
+    const dbDir = path.join(__dirname, '../db');
     const sfxJsonPath = path.join(dbDir, 'sfx.json');
 
     if (!fs.existsSync(publicDir)) {
@@ -33,9 +33,9 @@ const { publicDir } = ensureDirectoriesAndFiles();
 
 app.use(express.static(publicDir));
 
-import uploadSFXRouter from './routes/uploadSFX';
-import getSFXbyIDRouter from './routes/getSFXbyID';
-import getSFXlistRouter from './routes/getSFXlist';
+import uploadSFXRouter from '../routes/uploadSFX';
+import getSFXbyIDRouter from '../routes/getSFXbyID';
+import getSFXlistRouter from '../routes/getSFXlist';
 
 app.use('/uploadSFX', uploadSFXRouter);
 app.use('/getSFXbyID', getSFXbyIDRouter);

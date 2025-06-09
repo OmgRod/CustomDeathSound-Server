@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "main": "index.ts",
   "scripts": {
-    "start": "ts-node index.ts",
+    "start": "ts-node src/index.ts",
     "dev": "nodemon"
   },
   "keywords": [],
@@ -11,6 +11,7 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
+    "@types/multer": "^1.4.13",
     "bad-words": "^4.0.0",
     "dotenv": "^16.5.0",
     "lowdb": "^7.0.1",
