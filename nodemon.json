@@ -1,6 +1,6 @@
 {
   "watch": ["."],
   "ext": "ts,json",
-  "ignore": ["node_modules"],
+  "ignore": ["node_modules", "db", "public"],
   "exec": "ts-node src/index.ts"
 }

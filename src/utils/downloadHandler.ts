@@ -10,7 +10,11 @@ const soundsRouter = express.Router();
 const soundsRateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 100, // max 100 requests per windowMs
-  message: 'Too many requests, please try again later.',
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: (req, res) => {
+    res.status(429).json({ error: 'Too many requests, please try again later.' });
+  },
 });
 
 soundsRouter.get('/sounds/:filename', soundsRateLimiter, asyncHandler(async (req, res, next) => {
@@ -18,7 +22,7 @@ soundsRouter.get('/sounds/:filename', soundsRateLimiter, asyncHandler(async (req
   filename = sanitizeFilename(filename);
   if (!filename) {
     console.warn('Invalid filename provided:', req.params.filename);
-    res.status(400).send('Invalid filename');
+    res.status(400).json({ error: 'Invalid filename' });
     return;
   }
   console.log(`Requested file: ${filename}`);
