@@ -1,7 +1,10 @@
 import express, { Request, Response } from "express";
 import fs from "fs";
 import path from "path";
+import dotenv from "dotenv";
 import { initDB } from "./db";
+
+dotenv.config();
 
 async function ensureDirectoriesAndFiles() {
   const publicDir = path.join(__dirname, "../public");
@@ -34,7 +37,7 @@ async function startServer() {
   await initDB();
 
   const app = express();
-  const port = 3000;
+  const port = process.env["PORT"] || 3000;
 
   const downloadHandler = (await import("./utils/downloadHandler")).default;
   app.use(downloadHandler);

@@ -1,10 +1,14 @@
 import { Router, Request, Response } from 'express';
-import multer from 'multer';
+import multer, { FileFilterCallback } from 'multer';
 import path from 'path';
 import { sfxDB } from '../db';
 import { asyncHandler } from '../utils/asyncHandler';
 import { v4 as uuidv4 } from 'uuid';
 import rateLimiter from '../utils/rateLimiter';
+import dotenv from "dotenv";
+import leoProfanity from 'leo-profanity';
+
+dotenv.config();
 
 const router = Router();
 
@@ -12,6 +16,19 @@ router.use((req, res, next) => {
   (req as any).sfxId = uuidv4();
   next();
 });
+
+const allowedExtensions = ['.mp3', '.wav', '.ogg', '.flac'];
+
+const fileFilter = (req: Request, file: Express.Multer.File, cb: FileFilterCallback) => {
+  console.log('Detected mimetype:', file.mimetype);  // debug log
+
+  const ext = path.extname(file.originalname).toLowerCase();
+  if (allowedExtensions.includes(ext)) {
+    cb(null, true);
+  } else {
+    cb(new Error('Invalid file type. Only mp3, wav, ogg, and flac are allowed.'));
+  }
+};
 
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
@@ -24,7 +41,7 @@ const storage = multer.diskStorage({
   },
 });
 
-const upload = multer({ storage });
+const upload = multer({ storage, fileFilter });
 
 router.post(
   '/',
@@ -43,6 +60,17 @@ router.post(
       return res.status(400).json({ error: 'Missing required fields: name and file' });
     }
 
+    leoProfanity.loadDictionary("en");
+
+    if (leoProfanity.check(name)) {
+      return res.status(400).json({ error: 'Name contains inappropriate language.' });
+    }
+
+    const filesizeLimit = Number(process.env["FILESIZE_LIMIT"]);
+    if (file.size > filesizeLimit) {
+      return res.status(413).json({ error: `File exceeds size limit of ${filesizeLimit} bytes` });
+    }
+
     if (!sfxDB.data) sfxDB.data = { sfx: [] };
     if (!sfxDB.data.sfx) sfxDB.data.sfx = [];
 
@@ -51,8 +79,6 @@ router.post(
       name,
       url: `/sounds/${file.filename}`,
       downloads: 0,
-      // likes: 0,
-      // dislikes: 0
       createdAt: Date.now(),
     };
 
