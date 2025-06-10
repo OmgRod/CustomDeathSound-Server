@@ -14,10 +14,10 @@ router.get(
     const recent = Number(req.query.recent) >= 1;
 
     await packsDB.read();
-    const packsList = packsDB.data?.packs || [];
+    let packsList = packsDB.data?.packs || [];
 
     if (packsList.length === 0) {
-      return res.status(404).json({ error: 'Unable to find Packs' });
+      return res.status(404).json({ error: 'Unable to find packs' });
     }
 
     let sortedPacks;
@@ -30,7 +30,7 @@ router.get(
     const paginated = sortedPacks.slice((page - 1) * pageSize, page * pageSize);
 
     if (paginated.length === 0) {
-      return res.status(404).json({ error: 'Unable to find Packs on this page' });
+      return res.status(404).json({ error: 'Unable to find packs on this page' });
     }
 
     res.json(paginated);
