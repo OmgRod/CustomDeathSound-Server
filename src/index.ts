@@ -44,17 +44,17 @@ async function startServer() {
 
   const uploadSFXRouter = (await import("./routes/uploadSFX")).default;
   const getSFXbyIDRouter = (await import("./routes/sfx")).default;
-  const getSFXlistRouter = (await import("./routes/getSFXlist")).default;
+  const getTopSFXListRouter = (await import("./routes/getTopSFXlist")).default;
   const uploadPackRouter = (await import("./routes/uploadPack")).default;
   const getPackByIDRouter = (await import("./routes/pack")).default;
-  const getPackslistRouter = (await import("./routes/getPacksList")).default;
+  const getTopPacksListRouter = (await import("./routes/getTopPacksList")).default;
 
   app.use("/uploadSFX", uploadSFXRouter);
   app.use("/sfx", getSFXbyIDRouter);
-  app.use("/getSFXlist", getSFXlistRouter);
+  app.use("/getTopSFXlist", getTopSFXListRouter);
   app.use("/uploadPack", uploadPackRouter);
   app.use("/pack", getPackByIDRouter);
-  app.use("/getPacksList", getPackslistRouter);
+  app.use("/getTopPacksList", getTopPacksListRouter);
 
   app.get("/", (req: Request, res: Response) => {
     res.send("Server is running!");
