@@ -7,8 +7,8 @@ export interface SFX {
   name: string;
   url: string;
   downloads: number;
-  // likes: number;
-  // dislikes: number;
+  likes: number;
+  dislikes: number;
   createdAt: number;
 }
 
@@ -21,8 +21,8 @@ export interface Packs {
   name: string;
   ids: string[];
   downloads: number;
-  // likes: number;
-  // dislikes: number;
+  likes: number;
+  dislikes: number;
   createdAt: number;
 }
 

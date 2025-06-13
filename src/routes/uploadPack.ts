@@ -35,9 +35,9 @@ router.post(
       name,
       ids,
       downloads: 0,
-      // likes: 0,
-      // dislikes: 0
-      createdAt: Date.now(),
+      likes: 0,
+      dislikes: 0,
+      createdAt: Math.floor(Date.now() / 1000),
     };
 
     packsDB.data.packs.push(newPack);

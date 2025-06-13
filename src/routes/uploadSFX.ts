@@ -79,7 +79,9 @@ router.post(
       name,
       url: `/sounds/${file.filename}`,
       downloads: 0,
-      createdAt: Date.now(),
+      likes: 0,
+      dislikes: 0,
+      createdAt: Math.floor(Date.now() / 1000),
     };
 
     sfxDB.data.sfx.push(newSfx);
