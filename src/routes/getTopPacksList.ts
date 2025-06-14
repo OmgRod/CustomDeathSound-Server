@@ -9,31 +9,44 @@ router.get(
   '/',
   rateLimiter(15, 100),
   asyncHandler(async (req: Request, res: Response) => {
-    const page = parseInt(req.query.page as string, 10) || 1;
-    const pageSize = 15;
+    const pageSize = 10;
+
+    let page = parseInt(req.query.page as string, 10);
+    if (isNaN(page) || page < 1) {
+      page = 1;
+    }
+
     const recent = Number(req.query.recent) >= 1;
 
     await packsDB.read();
-    let packsList = packsDB.data?.packs || [];
+    const packsList = packsDB.data?.packs || [];
 
     if (packsList.length === 0) {
       return res.status(404).json({ error: 'Unable to find packs' });
     }
 
-    let sortedPacks;
-    if (recent) {
-      sortedPacks = [...packsList].sort((a, b) => b.createdAt - a.createdAt);
-    } else {
-      sortedPacks = [...packsList].sort((a, b) => b.downloads - a.downloads);
+    const sortedpacks = recent
+      ? [...packsList].sort((a, b) => b.createdAt - a.createdAt)
+      : [...packsList].sort((a, b) => b.downloads - a.downloads);
+
+    const totalItems = sortedpacks.length;
+    const totalPages = Math.ceil(totalItems / pageSize);
+
+    if (page > totalPages) {
+      return res.status(404).json({ error: 'Page number exceeds total pages' });
     }
 
-    const paginated = sortedPacks.slice((page - 1) * pageSize, page * pageSize);
+    const startIndex = (page - 1) * pageSize;
+    const endIndex = startIndex + pageSize;
+    const paginated = sortedpacks.slice(startIndex, endIndex);
 
-    if (paginated.length === 0) {
-      return res.status(404).json({ error: 'Unable to find packs on this page' });
-    }
-
-    res.json(paginated);
+    res.json({
+      page,
+      totalPages,
+      pageSize,
+      totalItems,
+      data: paginated,
+    });
   })
 );
 

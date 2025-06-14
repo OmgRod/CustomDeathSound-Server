@@ -9,7 +9,7 @@ router.get(
   '/',
   rateLimiter(15, 100),
   asyncHandler(async (req: Request, res: Response) => {
-    const pageSize = 15;
+    const pageSize = 10;
 
     let page = parseInt(req.query.page as string, 10);
     if (isNaN(page) || page < 1) {
