@@ -12,7 +12,7 @@
   "description": "",
   "dependencies": {
     "@ffmpeg-installer/ffmpeg": "^1.1.0",
-    "@types/dotenv": "^6.1.1",
+    "@types/dotenv": "^8.2.3",
     "@types/leo-profanity": "^1.5.4",
     "@types/multer": "^2.0.0",
     "@types/uuid": "^10.0.0",
