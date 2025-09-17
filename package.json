@@ -15,7 +15,7 @@
     "@types/dotenv": "^8.2.3",
     "@types/leo-profanity": "^1.5.4",
     "@types/multer": "^2.0.0",
-    "@types/uuid": "^10.0.0",
+    "@types/uuid": "^11.0.0",
     "dotenv": "^17.2.2",
     "express-rate-limit": "^8.1.0",
     "fluent-ffmpeg": "^2.1.3",
