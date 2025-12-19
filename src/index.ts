@@ -12,6 +12,7 @@ async function ensureDirectoriesAndFiles() {
   const dbDir = path.join(__dirname, "../db");
   const sfxJsonPath = path.join(dbDir, "sfx.json");
   const packsJsonPath = path.join(dbDir, "packs.json");
+  const usersJsonPath = path.join(dbDir, "users.json");
 
   if (!fs.existsSync(publicDir)) {
     fs.mkdirSync(publicDir);
@@ -28,8 +29,11 @@ async function ensureDirectoriesAndFiles() {
   if (!fs.existsSync(packsJsonPath)) {
     fs.writeFileSync(packsJsonPath, JSON.stringify({ packs: [] }, null, 2));
   }
+  if (!fs.existsSync(usersJsonPath)) {
+    fs.writeFileSync(usersJsonPath, JSON.stringify({ users: [] }, null, 2));
+  }
 
-  return { publicDir, soundsDir, dbDir, sfxJsonPath, packsJsonPath };
+  return { publicDir, soundsDir, dbDir, sfxJsonPath, packsJsonPath, usersJsonPath };
 }
 
 async function startServer() {
@@ -51,6 +55,7 @@ async function startServer() {
   const getTopPacksListRouter = (await import("./routes/getTopPacksList")).default;
   const uploadPackRouter = (await import("./routes/uploadPack")).default;
   const uploadSFXRouter = (await import("./routes/uploadSFX")).default;
+  const usersRouter = (await import("./routes/users")).default;
 
   app.use("/sfx", getSFXbyIDRouter);
   app.use("/getTopSFXlist", getTopSFXListRouter);
@@ -58,6 +63,7 @@ async function startServer() {
   app.use("/getTopPacksList", getTopPacksListRouter);
   app.use("/uploadPack", uploadPackRouter);
   app.use("/uploadSFX", uploadSFXRouter);
+  app.use("/users", usersRouter);
 
   app.get("/", (req: Request, res: Response) => {
     res.send("Server is running!");
