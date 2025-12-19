@@ -5,7 +5,7 @@ export interface AuthRequest extends Request {
   user?: {
     id: string;
     username: string;
-    role: string;
+    role: 'admin' | 'moderator' | 'user';
   };
 }
 

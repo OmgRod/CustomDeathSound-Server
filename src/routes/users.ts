@@ -69,6 +69,8 @@ router.post(
     usersDB.data.users.push(newUser);
     await usersDB.write();
 
+    // API key is returned ONLY on user creation - it cannot be retrieved later
+    // The user should save this key securely
     res.status(201).json({
       message: 'User created successfully',
       user: {

@@ -76,6 +76,8 @@ export async function initDB() {
   // Create initial admin user if INITIAL_ADMIN_API_KEY is set and no users exist
   const initialAdminKey = process.env['INITIAL_ADMIN_API_KEY'];
   if (initialAdminKey && usersDB.data.users.length === 0) {
+    // Using a predictable ID for the initial admin to make it easy to identify
+    // This is safe because it's only created once when the database is empty
     const adminUser: User = {
       id: 'admin-initial',
       username: 'admin',
