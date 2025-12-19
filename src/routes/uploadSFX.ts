@@ -7,6 +7,7 @@ import { v4 as uuidv4 } from 'uuid';
 import rateLimiter from '../utils/rateLimiter';
 import dotenv from "dotenv";
 import leoProfanity from 'leo-profanity';
+import { requireAuth, requireRole, AuthRequest } from '../middleware/auth';
 
 dotenv.config();
 
@@ -46,8 +47,10 @@ const upload = multer({ storage, fileFilter });
 router.post(
   '/',
   rateLimiter(15, 100),
+  requireAuth,
+  requireRole(['admin', 'moderator']),
   upload.single('file'),
-  asyncHandler(async (req: Request, res: Response) => {
+  asyncHandler(async (req: AuthRequest, res: Response) => {
     console.log('Reading DB...');
     await sfxDB.read();
     console.log('DB Data before:', sfxDB.data);

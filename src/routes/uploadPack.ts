@@ -3,13 +3,16 @@ import { asyncHandler } from '../utils/asyncHandler';
 import { packsDB, sfxDB } from '../db';
 import { v4 as uuidv4 } from 'uuid';
 import rateLimiter from '../utils/rateLimiter';
+import { requireAuth, requireRole, AuthRequest } from '../middleware/auth';
 
 const router = Router();
 
 router.post(
   '/',
   rateLimiter(15, 100),
-  asyncHandler(async (req: Request, res: Response) => {
+  requireAuth,
+  requireRole(['admin', 'moderator']),
+  asyncHandler(async (req: AuthRequest, res: Response) => {
     console.log('Reading Pack DB...');
     await packsDB.read();
     console.log('Reading SFX DB for validation...');

@@ -30,6 +30,18 @@ export interface PackDBSchema {
   packs: Packs[];
 }
 
+export interface User {
+  id: string;
+  username: string;
+  apiKey: string;
+  role: 'admin' | 'moderator' | 'user';
+  createdAt: number;
+}
+
+export interface UserDBSchema {
+  users: User[];
+}
+
 const sfxFile = path.join(__dirname, '../db/sfx.json');
 const sfxAdapter = new JSONFile<SFXDBSchema>(sfxFile);
 const sfxDB = new Low<SFXDBSchema>(sfxAdapter, { sfx: [] });
@@ -37,6 +49,10 @@ const sfxDB = new Low<SFXDBSchema>(sfxAdapter, { sfx: [] });
 const packsFile = path.join(__dirname, '../db/packs.json');
 const packsAdapter = new JSONFile<PackDBSchema>(packsFile);
 const packsDB = new Low<PackDBSchema>(packsAdapter, { packs: [] });
+
+const usersFile = path.join(__dirname, '../db/users.json');
+const usersAdapter = new JSONFile<UserDBSchema>(usersFile);
+const usersDB = new Low<UserDBSchema>(usersAdapter, { users: [] });
 
 export async function initDB() {
   await sfxDB.read();
@@ -50,6 +66,29 @@ export async function initDB() {
     packsDB.data = { packs: [] };
     await packsDB.write();
   }
+
+  await usersDB.read();
+  if (!usersDB.data) {
+    usersDB.data = { users: [] };
+    await usersDB.write();
+  }
+
+  // Create initial admin user if INITIAL_ADMIN_API_KEY is set and no users exist
+  const initialAdminKey = process.env['INITIAL_ADMIN_API_KEY'];
+  if (initialAdminKey && usersDB.data.users.length === 0) {
+    // Using a predictable ID for the initial admin to make it easy to identify
+    // This is safe because it's only created once when the database is empty
+    const adminUser: User = {
+      id: 'admin-initial',
+      username: 'admin',
+      apiKey: initialAdminKey,
+      role: 'admin',
+      createdAt: Math.floor(Date.now() / 1000),
+    };
+    usersDB.data.users.push(adminUser);
+    await usersDB.write();
+    console.log('Initial admin user created. Use the INITIAL_ADMIN_API_KEY to authenticate.');
+  }
 }
 
-export { sfxDB, packsDB };
+export { sfxDB, packsDB, usersDB };
