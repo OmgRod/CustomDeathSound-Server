@@ -5,7 +5,8 @@
   "scripts": {
     "start": "ts-node src/index.ts",
     "dev": "nodemon",
-    "add:sfx": "node scripts/addSfxToDb.js"
+    "add:sfx": "node scripts/addSfxToDb.js",
+    "add:pack": "node scripts/addPackToDb.js"
   },
   "keywords": [],
   "author": "",
