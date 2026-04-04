@@ -21,6 +21,33 @@ router.get('/:packID', rateLimiter(15, 100), asyncHandler(async (req: Request, r
     res.status(200).json({ pack });
 }));
 
+router.get(
+    '/:packID/download',
+    rateLimiter(15, 100),
+    asyncHandler(async (req: Request, res: Response) => {
+        const { packID } = req.params;
+
+        await packsDB.read();
+        if (!packsDB.data?.packs?.length) {
+            return res.status(404).json({ error: 'Pack not found' });
+        }
+
+        const pack = packsDB.data.packs.find(item => String(item.id) === packID);
+
+        if (!pack) {
+            return res.status(404).json({ error: 'Pack not found' });
+        }
+
+        pack.downloads = (pack.downloads ?? 0) + 1;
+        await packsDB.write();
+
+        return res.status(200).json({
+            message: 'Pack download recorded successfully',
+            pack,
+        });
+    })
+);
+
 router.delete(
     '/:packID',
     rateLimiter(15, 100),

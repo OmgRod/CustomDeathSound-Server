@@ -390,6 +390,7 @@ function renderPacks(items: PackItem[]) {
                 <p class="resource-card__meta">${escapeHtml(item.ids.join(', '))}</p>
               </div>
               <div class="resource-card__actions">
+                <button data-download-pack="${escapeHtml(item.id)}">Download</button>
                 ${canManage() ? `<button data-delete-pack="${escapeHtml(item.id)}">Delete</button>` : ''}
               </div>
             </article>
@@ -407,6 +408,14 @@ function renderPacks(items: PackItem[]) {
       });
     });
   }
+
+  packList.querySelectorAll<HTMLButtonElement>('[data-download-pack]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const packId = button.getAttribute('data-download-pack');
+      if (!packId) return;
+      void downloadPack(packId);
+    });
+  });
 }
 
 async function loadCurrentUser() {
@@ -522,6 +531,23 @@ async function deletePack(packId: string) {
   }
 
   setStatus('Pack deleted.');
+  await loadDashboard();
+}
+
+async function downloadPack(packId: string) {
+  if (!isActionAllowed(`download-pack:${packId}`, 1500)) {
+    return;
+  }
+
+  const response = await fetch(`/pack/${encodeURIComponent(packId)}/download`);
+
+  if (!response.ok) {
+    const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+    setStatus(payload?.error ?? 'Failed to record pack download.');
+    return;
+  }
+
+  setStatus('Pack download recorded.');
   await loadDashboard();
 }
 
