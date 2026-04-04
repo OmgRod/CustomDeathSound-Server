@@ -99,6 +99,8 @@ POST /uploadSFX
 Body: multipart/form-data with 'file' and 'name' fields
 ```
 
+New uploads start with an empty `tags` array.
+
 ### Upload Pack (Admin Only)
 ```bash
 POST /uploadPack
@@ -108,7 +110,7 @@ Body: {"name": "pack name", "ids": ["sfx-id-1", "sfx-id-2"]}
 ### Update Pack (Admin Only)
 ```bash
 PUT /pack/:packID
-Body: {"name": "pack name", "ids": ["sfx-id-1", "sfx-id-2"]}
+Body: {"name": "pack name", "ids": ["sfx-id-1", "sfx-id-2"], "downloads": 0}
 ```
 
 ### List Packs For Editor (Admin Only)
@@ -121,9 +123,25 @@ GET /pack
 GET /sfx?query=searchTerm&limit=20
 ```
 
+### Search SFX (Public, Dedicated Endpoint)
+```bash
+GET /sfx/search?query=searchTerm&limit=20
+```
+
+### Search Packs (Public)
+```bash
+GET /pack/search?query=searchTerm&limit=20
+```
+
 ### Get SFX (Public)
 ```bash
 GET /sfx/:sfxID
+```
+
+### Update SFX (Admin Only)
+```bash
+PUT /sfx/:sfxID
+Body: {"name": "new name", "downloads": 0, "tags": ["long", "loud"]}
 ```
 
 ### Record SFX Download (Public)
@@ -137,6 +155,25 @@ GET /sfx/:sfxID/file-status
 ```
 
 Returns whether the backing file currently exists in `public/sounds`.
+
+### Macro: Delete Missing-File SFX (Admin Only)
+```bash
+POST /sfx/admin/macros/delete-missing-files
+```
+
+Removes SFX database entries when their backing files are missing.
+
+### Macro: Auto Assign Tags (Admin Only)
+```bash
+POST /sfx/admin/macros/auto-assign-tags
+```
+
+Applies tags automatically:
+- `long`: duration > 3 seconds
+- `loud`: peak dBFS >= 0 dBFS, used as an approximate loudness cutoff
+
+The macro replaces the entire tags array with the computed result for each sound.
+Any tags that no longer apply are removed as part of the same pass.
 
 ### Get Pack (Public)
 ```bash

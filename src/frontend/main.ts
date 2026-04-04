@@ -4,6 +4,7 @@ type SfxItem = {
   id: string;
   name: string;
   url: string;
+  tags: string[];
   downloads: number;
   likes: number;
   dislikes: number;
@@ -68,6 +69,9 @@ app.innerHTML = `
             <button id="toggleRecentBtn" type="button" class="button--ghost">Sort: Recent</button>
           </div>
         </div>
+        <div class="search-row">
+          <input id="sfxSearchInput" type="text" placeholder="Search sounds by name or ID" autocomplete="off" />
+        </div>
         <div id="sfxList" class="card-list"></div>
         <div class="pagination-row" id="sfxPagination">
           <button id="sfxPrevBtn" type="button" class="button--ghost">Prev</button>
@@ -83,6 +87,9 @@ app.innerHTML = `
             <h2>Packs</h2>
           </div>
           <span id="libraryState" class="pill">Loading</span>
+        </div>
+        <div class="search-row">
+          <input id="packSearchInput" type="text" placeholder="Search packs by name or ID" autocomplete="off" />
         </div>
         <div id="packList" class="card-list"></div>
         <div class="pagination-row" id="packPagination">
@@ -115,6 +122,8 @@ const packNextBtn = document.querySelector<HTMLButtonElement>('#packNextBtn');
 const sfxPageInfo = document.querySelector<HTMLElement>('#sfxPageInfo');
 const packPageInfo = document.querySelector<HTMLElement>('#packPageInfo');
 const adminToolsPanel = document.querySelector<HTMLElement>('#adminToolsPanel');
+const sfxSearchInput = document.querySelector<HTMLInputElement>('#sfxSearchInput');
+const packSearchInput = document.querySelector<HTMLInputElement>('#packSearchInput');
 
 let recentSort = true;
 let currentUser: CurrentUser | null = null;
@@ -130,6 +139,15 @@ let packEditorEditingPackId: string | null = null;
 let packEditorSearchResults: SfxItem[] = [];
 let packEditorSearchTimer: number | null = null;
 const packEditorSfxMeta = new Map<string, SfxItem>();
+let sfxSearchQuery = '';
+let packSearchQuery = '';
+let sfxSearchTimer: number | null = null;
+let packSearchTimer: number | null = null;
+let sfxEditorEditingId: string | null = null;
+
+const toastStack = document.createElement('div');
+toastStack.id = 'toastStack';
+document.body.appendChild(toastStack);
 
 function isActionAllowed(actionKey: string, cooldownMs: number) {
   const now = Date.now();
@@ -186,10 +204,50 @@ packNextBtn?.addEventListener('click', () => {
   void loadDashboard();
 });
 
+sfxSearchInput?.addEventListener('input', (event) => {
+  const nextValue = (event.target as HTMLInputElement).value.trim();
+  if (sfxSearchTimer) {
+    window.clearTimeout(sfxSearchTimer);
+  }
+
+  sfxSearchTimer = window.setTimeout(() => {
+    sfxSearchQuery = nextValue;
+    sfxPage = 1;
+    void loadDashboard();
+  }, 250);
+});
+
+packSearchInput?.addEventListener('input', (event) => {
+  const nextValue = (event.target as HTMLInputElement).value.trim();
+  if (packSearchTimer) {
+    window.clearTimeout(packSearchTimer);
+  }
+
+  packSearchTimer = window.setTimeout(() => {
+    packSearchQuery = nextValue;
+    packPage = 1;
+    void loadDashboard();
+  }, 250);
+});
+
 function setStatus(message: string) {
   if (statusText) {
     statusText.textContent = message;
   }
+}
+
+function showToast(message: string, tone: 'success' | 'error' | 'info' = 'info') {
+  const toast = document.createElement('div');
+  toast.className = `toast toast--${tone}`;
+  toast.textContent = message;
+  toastStack.appendChild(toast);
+
+  window.setTimeout(() => {
+    toast.classList.add('toast--leaving');
+    window.setTimeout(() => {
+      toast.remove();
+    }, 240);
+  }, 2600);
 }
 
 function formatDate(timestamp: number) {
@@ -224,24 +282,27 @@ function canManage() {
 }
 
 function renderPagination() {
+  const isSfxSearching = sfxSearchQuery.length > 0;
+  const isPackSearching = packSearchQuery.length > 0;
+
   if (sfxPageInfo) {
-    sfxPageInfo.textContent = `Page ${sfxPage} / ${sfxTotalPages}`;
+    sfxPageInfo.textContent = isSfxSearching ? `Search (${sfxTotalPages})` : `Page ${sfxPage} / ${sfxTotalPages}`;
   }
   if (packPageInfo) {
-    packPageInfo.textContent = `Page ${packPage} / ${packTotalPages}`;
+    packPageInfo.textContent = isPackSearching ? `Search (${packTotalPages})` : `Page ${packPage} / ${packTotalPages}`;
   }
 
   if (sfxPrevBtn) {
-    sfxPrevBtn.disabled = sfxPage <= 1;
+    sfxPrevBtn.disabled = isSfxSearching || sfxPage <= 1;
   }
   if (sfxNextBtn) {
-    sfxNextBtn.disabled = sfxPage >= sfxTotalPages;
+    sfxNextBtn.disabled = isSfxSearching || sfxPage >= sfxTotalPages;
   }
   if (packPrevBtn) {
-    packPrevBtn.disabled = packPage <= 1;
+    packPrevBtn.disabled = isPackSearching || packPage <= 1;
   }
   if (packNextBtn) {
-    packNextBtn.disabled = packPage >= packTotalPages;
+    packNextBtn.disabled = isPackSearching || packPage >= packTotalPages;
   }
 }
 
@@ -315,6 +376,59 @@ function updatePackEditorUiState() {
   if (cancelButton) {
     cancelButton.hidden = !packEditorEditingPackId;
   }
+}
+
+function updateSfxEditorUiState() {
+  const title = document.querySelector<HTMLElement>('#sfxEditorTitle');
+  const submitButton = document.querySelector<HTMLButtonElement>('#saveSfxBtn');
+  const cancelButton = document.querySelector<HTMLButtonElement>('#cancelSfxEditBtn');
+
+  if (title) {
+    title.textContent = sfxEditorEditingId ? 'Edit SFX' : 'Select SFX To Edit';
+  }
+
+  if (submitButton) {
+    submitButton.disabled = !sfxEditorEditingId;
+    submitButton.textContent = sfxEditorEditingId ? 'Save SFX Changes' : 'Save SFX Changes';
+  }
+
+  if (cancelButton) {
+    cancelButton.hidden = !sfxEditorEditingId;
+  }
+}
+
+function parseTags(raw: string) {
+  return [...new Set(raw.split(/[\n,]/).map((entry) => entry.trim().toLowerCase()).filter(Boolean))];
+}
+
+function beginEditingSfx(item: SfxItem) {
+  sfxEditorEditingId = item.id;
+  const nameInput = document.querySelector<HTMLInputElement>('#editSfxName');
+  const downloadsInput = document.querySelector<HTMLInputElement>('#editSfxDownloads');
+  const tagsInput = document.querySelector<HTMLTextAreaElement>('#editSfxTags');
+  const idPill = document.querySelector<HTMLElement>('#editSfxIdPill');
+
+  if (nameInput) nameInput.value = item.name;
+  if (downloadsInput) downloadsInput.value = String(Math.max(0, item.downloads ?? 0));
+  if (tagsInput) tagsInput.value = (item.tags ?? []).join(', ');
+  if (idPill) idPill.textContent = item.id;
+
+  updateSfxEditorUiState();
+}
+
+function resetSfxEditor() {
+  sfxEditorEditingId = null;
+  const nameInput = document.querySelector<HTMLInputElement>('#editSfxName');
+  const downloadsInput = document.querySelector<HTMLInputElement>('#editSfxDownloads');
+  const tagsInput = document.querySelector<HTMLTextAreaElement>('#editSfxTags');
+  const idPill = document.querySelector<HTMLElement>('#editSfxIdPill');
+
+  if (nameInput) nameInput.value = '';
+  if (downloadsInput) downloadsInput.value = '0';
+  if (tagsInput) tagsInput.value = '';
+  if (idPill) idPill.textContent = 'No SFX selected';
+
+  updateSfxEditorUiState();
 }
 
 function renderPackEditorSelectedList() {
@@ -400,7 +514,7 @@ async function hydrateSelectedSfxMeta(ids: string[]) {
 }
 
 async function searchSfxForPackEditor(query: string) {
-  const response = await fetch(`/sfx?query=${encodeURIComponent(query)}&limit=20`);
+  const response = await fetch(`/sfx/search?query=${encodeURIComponent(query)}&limit=20`);
   if (!response.ok) {
     packEditorSearchResults = [];
     renderPackEditorSearchResults();
@@ -418,6 +532,7 @@ async function searchSfxForPackEditor(query: string) {
 async function beginEditingPack(packId: string) {
   const nameInput = document.querySelector<HTMLInputElement>('#savePackName');
   const searchInput = document.querySelector<HTMLInputElement>('#packSfxSearch');
+  const downloadsInput = document.querySelector<HTMLInputElement>('#savePackDownloads');
 
   if (!packId) {
     packEditorEditingPackId = null;
@@ -426,6 +541,7 @@ async function beginEditingPack(packId: string) {
     packEditorSearchResults = [];
     if (nameInput) nameInput.value = '';
     if (searchInput) searchInput.value = '';
+    if (downloadsInput) downloadsInput.value = '0';
     updatePackEditorUiState();
     renderPackEditorSelectedList();
     renderPackEditorSearchResults();
@@ -444,6 +560,7 @@ async function beginEditingPack(packId: string) {
   packEditorSearchResults = [];
   if (nameInput) nameInput.value = matched.name;
   if (searchInput) searchInput.value = '';
+  if (downloadsInput) downloadsInput.value = String(Math.max(0, matched.downloads ?? 0));
   await hydrateSelectedSfxMeta(packEditorSelectedIds);
   updatePackEditorUiState();
   renderPackEditorSelectedList();
@@ -481,6 +598,11 @@ async function renderAdminTools(force = false) {
       <span class="pill">Admin only</span>
     </div>
 
+    <div class="admin-macro-row">
+      <button id="macroDeleteMissingBtn" type="button" class="button--ghost">Macro: Delete Missing-File SFX</button>
+      <button id="macroAutoTagBtn" type="button" class="button--ghost">Macro: Auto Assign Tags</button>
+    </div>
+
     <div class="admin-grid">
       <form id="uploadSfxForm" class="admin-form">
         <h3>Upload SFX</h3>
@@ -495,6 +617,27 @@ async function renderAdminTools(force = false) {
         <button type="submit">Upload Sound</button>
       </form>
 
+      <form id="editSfxForm" class="admin-form">
+        <h3 id="sfxEditorTitle">Select SFX To Edit</h3>
+        <p id="editSfxIdPill" class="pill">No SFX selected</p>
+        <label>
+          Name
+          <input id="editSfxName" name="name" type="text" />
+        </label>
+        <label>
+          Downloads
+          <input id="editSfxDownloads" name="downloads" type="number" min="0" step="1" value="0" />
+        </label>
+        <label>
+          Tags (comma or newline separated)
+          <textarea id="editSfxTags" name="tags" rows="4" placeholder="long, loud"></textarea>
+        </label>
+        <div class="auth-actions">
+          <button id="saveSfxBtn" type="submit" disabled>Save SFX Changes</button>
+          <button id="cancelSfxEditBtn" type="button" class="button--ghost" hidden>Cancel Edit</button>
+        </div>
+      </form>
+
       <form id="createPackForm" class="admin-form">
         <h3 id="packEditorTitle">Create Pack</h3>
         <label>
@@ -507,6 +650,10 @@ async function renderAdminTools(force = false) {
         <label>
           Pack name
           <input id="savePackName" name="name" type="text" required />
+        </label>
+        <label>
+          Downloads
+          <input id="savePackDownloads" name="downloads" type="number" min="0" step="1" value="0" />
         </label>
         <label>
           Search sounds by name or ID
@@ -535,6 +682,11 @@ async function renderAdminTools(force = false) {
     void submitSavePack();
   });
 
+  document.querySelector<HTMLFormElement>('#editSfxForm')?.addEventListener('submit', (event) => {
+    event.preventDefault();
+    void submitSaveSfx();
+  });
+
   document.querySelector<HTMLSelectElement>('#packEditorSelect')?.addEventListener('change', (event) => {
     const value = (event.target as HTMLSelectElement).value;
     void beginEditingPack(value);
@@ -558,9 +710,22 @@ async function renderAdminTools(force = false) {
     void beginEditingPack('');
   });
 
+  document.querySelector<HTMLButtonElement>('#cancelSfxEditBtn')?.addEventListener('click', () => {
+    resetSfxEditor();
+  });
+
+  document.querySelector<HTMLButtonElement>('#macroDeleteMissingBtn')?.addEventListener('click', () => {
+    void runMacroDeleteMissingFiles();
+  });
+
+  document.querySelector<HTMLButtonElement>('#macroAutoTagBtn')?.addEventListener('click', () => {
+    void runMacroAutoAssignTags();
+  });
+
   updatePackEditorUiState();
   renderPackEditorSelectedList();
   renderPackEditorSearchResults();
+  updateSfxEditorUiState();
 }
 
 function renderSfx(items: SfxItem[]) {
@@ -578,9 +743,11 @@ function renderSfx(items: SfxItem[]) {
                 </div>
                 <p class="resource-card__meta">${formatDate(item.createdAt)} · ${item.downloads} downloads · ${item.likes} likes</p>
                 <p class="resource-card__meta">${escapeHtml(item.url)}</p>
+                ${item.tags?.length ? `<p class="resource-card__meta">tags: ${escapeHtml(item.tags.join(', '))}</p>` : ''}
               </div>
               <div class="resource-card__actions">
                 <button type="button" class="button button--ghost" data-play-sfx="${escapeHtml(item.id)}">Play</button>
+                ${canManage() ? `<button type="button" data-edit-sfx="${escapeHtml(item.id)}">Edit</button>` : ''}
                 ${canManage() ? `<button type="button" data-delete-sfx="${escapeHtml(item.id)}">Delete</button>` : ''}
               </div>
             </article>
@@ -598,6 +765,18 @@ function renderSfx(items: SfxItem[]) {
   });
 
   if (canManage()) {
+    sfxList.querySelectorAll<HTMLButtonElement>('[data-edit-sfx]').forEach((button) => {
+      button.addEventListener('click', () => {
+        const sfxId = button.getAttribute('data-edit-sfx');
+        if (!sfxId) return;
+        const item = items.find((entry) => entry.id === sfxId);
+        if (!item) return;
+
+        beginEditingSfx(item);
+        document.querySelector<HTMLElement>('#adminToolsPanel')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
+    });
+
     sfxList.querySelectorAll<HTMLButtonElement>('[data-delete-sfx]').forEach((button) => {
       button.addEventListener('click', () => {
         const sfxId = button.getAttribute('data-delete-sfx');
@@ -684,19 +863,30 @@ async function loadDashboard() {
 
     await loadCurrentUser();
 
-    const [sfxResponse, packResponse] = await Promise.all([
-      fetch(`/getTopSFXlist?recent=${recentSort ? 1 : 0}&page=${sfxPage}`),
-      fetch(`/getTopPacksList?recent=${recentSort ? 1 : 0}&page=${packPage}`),
-    ]);
+    const sfxFetch = sfxSearchQuery
+      ? fetch(`/sfx/search?query=${encodeURIComponent(sfxSearchQuery)}&limit=50`)
+      : fetch(`/getTopSFXlist?recent=${recentSort ? 1 : 0}&page=${sfxPage}`);
+    const packFetch = packSearchQuery
+      ? fetch(`/pack/search?query=${encodeURIComponent(packSearchQuery)}&limit=50`)
+      : fetch(`/getTopPacksList?recent=${recentSort ? 1 : 0}&page=${packPage}`);
 
-    const sfxData = (await sfxResponse.json()) as ListResponse<SfxItem> | { error?: string };
-    const packData = (await packResponse.json()) as ListResponse<PackItem> | { error?: string };
+    const [sfxResponse, packResponse] = await Promise.all([sfxFetch, packFetch]);
 
-    renderSfx('data' in sfxData ? sfxData.data : []);
-    renderPacks('data' in packData ? packData.data : []);
+    const sfxData = (await sfxResponse.json()) as ListResponse<SfxItem> | { data?: SfxItem[]; error?: string };
+    const packData = (await packResponse.json()) as ListResponse<PackItem> | { data?: PackItem[]; error?: string };
 
-    sfxTotalPages = 'totalPages' in sfxData && sfxData.totalPages > 0 ? sfxData.totalPages : 1;
-    packTotalPages = 'totalPages' in packData && packData.totalPages > 0 ? packData.totalPages : 1;
+    const sfxItems = 'data' in sfxData && Array.isArray(sfxData.data) ? sfxData.data : [];
+    const packItems = 'data' in packData && Array.isArray(packData.data) ? packData.data : [];
+
+    renderSfx(sfxItems);
+    renderPacks(packItems);
+
+    sfxTotalPages = sfxSearchQuery
+      ? 1
+      : ('totalPages' in sfxData && sfxData.totalPages > 0 ? sfxData.totalPages : 1);
+    packTotalPages = packSearchQuery
+      ? 1
+      : ('totalPages' in packData && packData.totalPages > 0 ? packData.totalPages : 1);
 
     if (sfxPage > sfxTotalPages) {
       sfxPage = sfxTotalPages;
@@ -714,7 +904,9 @@ async function loadDashboard() {
     if ('error' in sfxData || 'error' in packData) {
       setStatus('Loaded with empty results or API warnings.');
     } else {
-      setStatus(`Loaded page 1 in ${recentSort ? 'recent' : 'popular'} mode.`);
+      const sfxMode = sfxSearchQuery ? `sounds search "${sfxSearchQuery}"` : `${recentSort ? 'recent' : 'popular'} sounds`;
+      const packMode = packSearchQuery ? `packs search "${packSearchQuery}"` : `${recentSort ? 'recent' : 'popular'} packs`;
+      setStatus(`Loaded ${sfxMode} and ${packMode}.`);
     }
   } catch (error) {
     console.error(error);
@@ -883,9 +1075,13 @@ async function submitSavePack() {
 
   const nameInput = document.querySelector<HTMLInputElement>('#savePackName');
   const selector = document.querySelector<HTMLSelectElement>('#packEditorSelect');
+  const downloadsInput = document.querySelector<HTMLInputElement>('#savePackDownloads');
 
   const name = nameInput?.value.trim() ?? '';
   const ids = [...new Set(packEditorSelectedIds.map((entry) => entry.trim()).filter(Boolean))];
+  const downloads = Number.isFinite(Number(downloadsInput?.value))
+    ? Math.max(0, Math.floor(Number(downloadsInput?.value)))
+    : 0;
 
   if (!name || ids.length === 0) {
     setStatus('Pack requires a name and at least one selected sound.');
@@ -903,7 +1099,7 @@ async function submitSavePack() {
     headers: {
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ name, ids }),
+    body: JSON.stringify({ name, ids, downloads }),
   });
 
   if (!response.ok) {
@@ -915,12 +1111,117 @@ async function submitSavePack() {
   setStatus(`Pack ${isEditing ? 'updated' : 'created'} successfully.`);
   if (nameInput) nameInput.value = '';
   if (selector) selector.value = '';
+  if (downloadsInput) downloadsInput.value = '0';
   packEditorEditingPackId = null;
   packEditorSelectedIds = [];
   packEditorSearchResults = [];
   packEditorSfxMeta.clear();
   packPage = 1;
   await renderAdminTools(true);
+  await loadDashboard();
+}
+
+async function submitSaveSfx() {
+  if (!canManage()) {
+    setStatus('Only admins can edit SFX.');
+    return;
+  }
+
+  if (!sfxEditorEditingId) {
+    setStatus('Choose a sound from the list first.');
+    return;
+  }
+
+  const nameInput = document.querySelector<HTMLInputElement>('#editSfxName');
+  const downloadsInput = document.querySelector<HTMLInputElement>('#editSfxDownloads');
+  const tagsInput = document.querySelector<HTMLTextAreaElement>('#editSfxTags');
+
+  const name = nameInput?.value.trim() ?? '';
+  const downloads = Number.isFinite(Number(downloadsInput?.value))
+    ? Math.max(0, Math.floor(Number(downloadsInput?.value)))
+    : 0;
+  const tags = parseTags(tagsInput?.value ?? '');
+
+  if (!name) {
+    setStatus('SFX name is required.');
+    return;
+  }
+
+  const response = await fetch(`/sfx/${encodeURIComponent(sfxEditorEditingId)}`, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ name, downloads, tags }),
+  });
+
+  if (!response.ok) {
+    const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+    setStatus(payload?.error ?? 'Failed to update SFX.');
+    return;
+  }
+
+  setStatus('SFX updated successfully.');
+  await loadDashboard();
+}
+
+async function runMacroDeleteMissingFiles() {
+  if (!canManage()) {
+    showToast('Only admins can run macros.', 'error');
+    return;
+  }
+
+  const response = await fetch('/sfx/admin/macros/delete-missing-files', {
+    method: 'POST',
+  });
+
+  const payload = (await response.json().catch(() => null)) as {
+    message?: string;
+    removedCount?: number;
+    remainingCount?: number;
+    error?: string;
+  } | null;
+
+  if (!response.ok) {
+    showToast(payload?.error ?? 'Missing-file macro failed.', 'error');
+    return;
+  }
+
+  showToast(
+    `${payload?.message ?? 'Cleanup complete.'} Removed ${payload?.removedCount ?? 0} SFX, ${payload?.remainingCount ?? 0} remaining.`,
+    'success',
+  );
+  await loadDashboard();
+}
+
+async function runMacroAutoAssignTags() {
+  if (!canManage()) {
+    showToast('Only admins can run macros.', 'error');
+    return;
+  }
+
+  const response = await fetch('/sfx/admin/macros/auto-assign-tags', {
+    method: 'POST',
+  });
+
+  const payload = (await response.json().catch(() => null)) as {
+    message?: string;
+    updatedCount?: number;
+    longCount?: number;
+    loudCount?: number;
+    failedCount?: number;
+    error?: string;
+  } | null;
+
+  if (!response.ok) {
+    showToast(payload?.error ?? 'Auto-tag macro failed.', 'error');
+    return;
+  }
+
+  showToast(
+    `${payload?.message ?? 'Auto-tag complete.'} Updated ${payload?.updatedCount ?? 0}, long=${payload?.longCount ?? 0}, loud=${payload?.loudCount ?? 0}, failed=${payload?.failedCount ?? 0}.`,
+    'success',
+  );
   await loadDashboard();
 }
 

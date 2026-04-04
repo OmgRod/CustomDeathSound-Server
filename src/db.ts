@@ -6,6 +6,7 @@ export interface SFX {
   id: string;
   name: string;
   url: string;
+  tags: string[];
   downloads: number;
   likes: number;
   dislikes: number;
@@ -53,8 +54,25 @@ const usersDB = new Low<UserDBSchema>(usersAdapter, { users: [] });
 
 export async function initDB() {
   await sfxDB.read();
+  let sfxTouched = false;
   if (!sfxDB.data) {
     sfxDB.data = { sfx: [] };
+    sfxTouched = true;
+  }
+
+  sfxDB.data.sfx = sfxDB.data.sfx.map((item) => {
+    if (!Array.isArray((item as { tags?: string[] }).tags)) {
+      sfxTouched = true;
+      return {
+        ...item,
+        tags: [],
+      };
+    }
+
+    return item;
+  });
+
+  if (sfxTouched) {
     await sfxDB.write();
   }
 

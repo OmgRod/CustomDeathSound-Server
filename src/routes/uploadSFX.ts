@@ -81,6 +81,7 @@ router.post(
       id: sfxId,
       name,
       url: `/sounds/${file.filename}`,
+      tags: [],
       downloads: 0,
       likes: 0,
       dislikes: 0,

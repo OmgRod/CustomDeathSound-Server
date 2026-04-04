@@ -7,6 +7,30 @@ import rateLimiter from '../utils/rateLimiter';
 const router = express.Router();
 
 router.get(
+    '/search',
+    rateLimiter(15, 100),
+    asyncHandler(async (req: Request, res: Response) => {
+        const query = String(req.query.query ?? '').trim().toLowerCase();
+        const limitRaw = Number(req.query.limit);
+        const limit = Number.isFinite(limitRaw) ? Math.min(Math.max(limitRaw, 1), 50) : 20;
+
+        await packsDB.read();
+        const packsList = packsDB.data?.packs || [];
+
+        const filtered = !query
+            ? packsList
+            : packsList.filter((item) => {
+                const id = String(item.id).toLowerCase();
+                const name = String(item.name).toLowerCase();
+                return id.includes(query) || name.includes(query);
+            });
+
+        const sorted = [...filtered].sort((a, b) => b.createdAt - a.createdAt).slice(0, limit);
+        return res.status(200).json({ data: sorted });
+    })
+);
+
+router.get(
     '/',
     rateLimiter(15, 100),
     requireAuth,
@@ -95,7 +119,7 @@ router.put(
     requireRole(['admin']),
     asyncHandler(async (req: AuthRequest, res: Response) => {
         const { packID } = req.params;
-        const { name, ids } = req.body as { name?: string; ids?: string[] };
+        const { name, ids, downloads } = req.body as { name?: string; ids?: string[]; downloads?: number };
 
         if (!name || !Array.isArray(ids) || ids.length === 0) {
             return res.status(400).json({ error: 'Missing required fields: name and ids (non-empty array of strings)' });
@@ -118,10 +142,15 @@ router.put(
         }
 
         const existingPack = packsList[packIndex];
+        const normalizedDownloads = Number.isFinite(downloads)
+            ? Math.max(0, Math.floor(Number(downloads)))
+            : existingPack.downloads;
+
         packsList[packIndex] = {
             ...existingPack,
             name: String(name).trim(),
             ids: uniqueIds,
+            downloads: normalizedDownloads,
         };
 
         await packsDB.write();

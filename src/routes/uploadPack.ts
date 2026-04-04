@@ -18,7 +18,7 @@ router.post(
     console.log('Reading SFX DB for validation...');
     await sfxDB.read();
 
-    const { name, ids } = req.body;
+    const { name, ids, downloads } = req.body as { name?: string; ids?: string[]; downloads?: number };
 
     if (!name || !Array.isArray(ids)) {
       return res.status(400).json({ error: 'Missing required fields: name and ids (array of strings)' });
@@ -33,11 +33,15 @@ router.post(
       return res.status(400).json({ error: `Invalid SFX IDs: ${invalidIds.join(', ')}` });
     }
 
+    const normalizedDownloads = Number.isFinite(downloads)
+      ? Math.max(0, Math.floor(Number(downloads)))
+      : 0;
+
     const newPack = {
       id: uuidv4(),
       name,
       ids,
-      downloads: 0,
+      downloads: normalizedDownloads,
       likes: 0,
       dislikes: 0,
       createdAt: Math.floor(Date.now() / 1000),

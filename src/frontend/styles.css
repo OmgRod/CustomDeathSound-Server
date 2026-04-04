@@ -213,6 +213,13 @@ select {
   margin-bottom: 1rem;
 }
 
+.admin-macro-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+  margin-bottom: 1rem;
+}
+
 .pill,
 .chip {
   display: inline-flex;
@@ -229,6 +236,10 @@ select {
 .card-list {
   display: grid;
   gap: 0.75rem;
+}
+
+.search-row {
+  margin: 0 0 0.85rem;
 }
 
 .pagination-row {
@@ -349,6 +360,47 @@ a.button {
   font-size: 0.94rem;
 }
 
+#toastStack {
+  position: fixed;
+  right: 1rem;
+  bottom: 1rem;
+  display: grid;
+  gap: 0.55rem;
+  z-index: 1200;
+}
+
+.toast {
+  min-width: 280px;
+  max-width: 420px;
+  border: 1px solid var(--panel-border);
+  border-left-width: 4px;
+  background: #12161d;
+  color: var(--text);
+  border-radius: 8px;
+  padding: 0.7rem 0.8rem;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.32);
+  opacity: 1;
+  transform: translateY(0);
+  transition: opacity 180ms ease, transform 180ms ease;
+}
+
+.toast--success {
+  border-left-color: #3dbb73;
+}
+
+.toast--error {
+  border-left-color: var(--danger);
+}
+
+.toast--info {
+  border-left-color: var(--accent-2);
+}
+
+.toast--leaving {
+  opacity: 0;
+  transform: translateY(6px);
+}
+
 @media (max-width: 900px) {
   .hero {
     grid-template-columns: 1fr;
@@ -381,5 +433,16 @@ a.button {
 
   .hero__actions {
     flex-direction: column;
+  }
+
+  #toastStack {
+    left: 0.75rem;
+    right: 0.75rem;
+    bottom: 0.75rem;
+  }
+
+  .toast {
+    min-width: 0;
+    width: 100%;
   }
 }
