@@ -1,10 +1,13 @@
 import { Request, Response, NextFunction } from 'express';
 import { usersDB } from '../db';
+import { parseCookieHeader, verifySignedSessionToken } from '../utils/session';
 
 export interface AuthRequest extends Request {
   user?: {
     id: string;
     username: string;
+    githubUsername?: string;
+    githubId?: string;
     role: 'admin' | 'moderator' | 'user';
   };
 }
@@ -15,26 +18,31 @@ export const requireAuth = async (
   next: NextFunction
 ): Promise<void> => {
   try {
-    const apiKey = req.headers['x-api-key'] as string;
+    const sessionSecret = process.env['SESSION_SECRET'] || 'dev-session-secret';
+    const cookies = parseCookieHeader(req.headers.cookie);
+    const session = verifySignedSessionToken(cookies['cds_session'], sessionSecret);
 
-    if (!apiKey) {
-      res.status(401).json({ error: 'API key is required' });
+    if (!session) {
+      res.status(401).json({ error: 'Login required' });
       return;
     }
 
     await usersDB.read();
     const users = usersDB.data?.users || [];
 
-    const user = users.find(u => u.apiKey === apiKey);
+    const user = users.find((u) => u.id === session.userId);
 
     if (!user) {
-      res.status(401).json({ error: 'Invalid API key' });
+      res.status(401).json({ error: 'Login required' });
       return;
     }
 
+    const githubUsername = user.githubUsername || user.username;
     req.user = {
       id: user.id,
       username: user.username,
+      githubUsername,
+      githubId: user.githubId,
       role: user.role,
     };
 
@@ -52,9 +60,7 @@ export const requireRole = (allowedRoles: string[]) => {
     }
 
     if (!allowedRoles.includes(req.user.role)) {
-      res.status(403).json({ 
-        error: 'Insufficient permissions. Only moderators and admins can upload.' 
-      });
+      res.status(403).json({ error: 'Insufficient permissions' });
       return;
     }
 

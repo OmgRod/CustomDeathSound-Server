@@ -33,9 +33,13 @@ export interface PackDBSchema {
 export interface User {
   id: string;
   username: string;
-  apiKey: string;
+  githubId?: string;
+  githubUsername?: string;
+  apiKey?: string;
   role: 'admin' | 'moderator' | 'user';
   createdAt: number;
+  lastLoginAt?: number;
+  loginCount?: number;
 }
 
 export interface UserDBSchema {
@@ -71,23 +75,6 @@ export async function initDB() {
   if (!usersDB.data) {
     usersDB.data = { users: [] };
     await usersDB.write();
-  }
-
-  // Create initial admin user if INITIAL_ADMIN_API_KEY is set and no users exist
-  const initialAdminKey = process.env['INITIAL_ADMIN_API_KEY'];
-  if (initialAdminKey && usersDB.data.users.length === 0) {
-    // Using a predictable ID for the initial admin to make it easy to identify
-    // This is safe because it's only created once when the database is empty
-    const adminUser: User = {
-      id: 'admin-initial',
-      username: 'admin',
-      apiKey: initialAdminKey,
-      role: 'admin',
-      createdAt: Math.floor(Date.now() / 1000),
-    };
-    usersDB.data.users.push(adminUser);
-    await usersDB.write();
-    console.log('Initial admin user created. Use the INITIAL_ADMIN_API_KEY to authenticate.');
   }
 }
 

@@ -48,7 +48,7 @@ router.post(
   '/',
   rateLimiter(15, 100),
   requireAuth,
-  requireRole(['admin', 'moderator']),
+  requireRole(['admin']),
   upload.single('file'),
   asyncHandler(async (req: AuthRequest, res: Response) => {
     console.log('Reading DB...');

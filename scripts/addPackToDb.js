@@ -78,37 +78,44 @@ async function main() {
   const rl = readline.createInterface({ input: stdin, output: stdout });
 
   try {
-    console.log('Add a new sound pack entry to db/packs.json');
+    console.log('Add sound pack entries to db/packs.json');
 
-    const sfxDb = await loadDb(sfxDbPath, 'sfx');
-    if (sfxDb.sfx.length === 0) {
-      console.log('No SFX entries found in db/sfx.json. Add SFX first.');
-      return;
+    while (true) {
+      const sfxDb = await loadDb(sfxDbPath, 'sfx');
+      if (sfxDb.sfx.length === 0) {
+        console.log('No SFX entries found in db/sfx.json. Add SFX first.');
+        return;
+      }
+
+      const packsDb = await loadDb(packsDbPath, 'packs');
+      const validIdSet = new Set(sfxDb.sfx.map((item) => String(item.id)));
+
+      showAvailableSfx(sfxDb.sfx);
+
+      const name = await askNonEmpty(rl, 'Pack name: ');
+      const ids = await askForIds(rl, validIdSet);
+
+      const newPack = {
+        id: uuidv4(),
+        name,
+        ids,
+        downloads: 0,
+        likes: 0,
+        dislikes: 0,
+        createdAt: Math.floor(Date.now() / 1000),
+      };
+
+      packsDb.packs.push(newPack);
+      await savePacksDb(packsDb);
+
+      console.log('Added sound pack successfully:');
+      console.log(JSON.stringify(newPack, null, 2));
+
+      const again = (await rl.question('Do you want to add another pack? (y/N): ')).trim().toLowerCase();
+      if (again !== 'y' && again !== 'yes') {
+        return;
+      }
     }
-
-    const packsDb = await loadDb(packsDbPath, 'packs');
-    const validIdSet = new Set(sfxDb.sfx.map((item) => String(item.id)));
-
-    showAvailableSfx(sfxDb.sfx);
-
-    const name = await askNonEmpty(rl, 'Pack name: ');
-    const ids = await askForIds(rl, validIdSet);
-
-    const newPack = {
-      id: uuidv4(),
-      name,
-      ids,
-      downloads: 0,
-      likes: 0,
-      dislikes: 0,
-      createdAt: Math.floor(Date.now() / 1000),
-    };
-
-    packsDb.packs.push(newPack);
-    await savePacksDb(packsDb);
-
-    console.log('Added sound pack successfully:');
-    console.log(JSON.stringify(newPack, null, 2));
   } finally {
     rl.close();
   }

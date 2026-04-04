@@ -65,41 +65,52 @@ async function main() {
   const rl = readline.createInterface({ input: stdin, output: stdout });
 
   try {
-    console.log('Add a new SFX entry to db/sfx.json');
+    console.log('Add SFX entries to db/sfx.json');
     console.log('This script does not copy files. The sound file must already exist in public/sounds.');
 
-    const name = await askNonEmpty(rl, 'SFX name: ');
-    const filename = await askExistingSoundFilename(rl);
+    while (true) {
+      const name = await askNonEmpty(rl, 'SFX name: ');
+      const filename = await askExistingSoundFilename(rl);
 
-    const db = await loadDb();
-    const url = `/sounds/${filename}`;
+      const db = await loadDb();
+      const url = `/sounds/${filename}`;
 
-    const alreadyExists = db.sfx.some((item) => item && item.url === url);
-    if (alreadyExists) {
-      const confirm = (await rl.question('An entry already exists with this filename. Add another anyway? (y/N): '))
-        .trim()
-        .toLowerCase();
-      if (confirm !== 'y' && confirm !== 'yes') {
-        console.log('Cancelled. No changes were written.');
+      const alreadyExists = db.sfx.some((item) => item && item.url === url);
+      if (alreadyExists) {
+        const confirm = (await rl.question('An entry already exists with this filename. Add another anyway? (y/N): '))
+          .trim()
+          .toLowerCase();
+        if (confirm !== 'y' && confirm !== 'yes') {
+          const again = (await rl.question('Do you want to add another sound? (y/N): ')).trim().toLowerCase();
+          if (again !== 'y' && again !== 'yes') {
+            console.log('Done. No changes were written for this round.');
+            return;
+          }
+          continue;
+        }
+      }
+
+      const newEntry = {
+        id: uuidv4(),
+        name,
+        url,
+        downloads: 0,
+        likes: 0,
+        dislikes: 0,
+        createdAt: Math.floor(Date.now() / 1000),
+      };
+
+      db.sfx.push(newEntry);
+      await saveDb(db);
+
+      console.log('Added SFX entry successfully:');
+      console.log(JSON.stringify(newEntry, null, 2));
+
+      const again = (await rl.question('Do you want to add another sound? (y/N): ')).trim().toLowerCase();
+      if (again !== 'y' && again !== 'yes') {
         return;
       }
     }
-
-    const newEntry = {
-      id: uuidv4(),
-      name,
-      url,
-      downloads: 0,
-      likes: 0,
-      dislikes: 0,
-      createdAt: Math.floor(Date.now() / 1000),
-    };
-
-    db.sfx.push(newEntry);
-    await saveDb(db);
-
-    console.log('Added SFX entry successfully:');
-    console.log(JSON.stringify(newEntry, null, 2));
   } finally {
     rl.close();
   }

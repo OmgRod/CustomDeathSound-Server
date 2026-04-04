@@ -1,0 +1,24 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "outDir": "build",
+    "rootDir": "src",
+    "declaration": false,
+    "sourceMap": false,
+    "noEmit": false,
+    "types": [
+      "node",
+      "express",
+      "multer"
+    ]
+  },
+  "include": [
+    "src/**/*.ts"
+  ],
+  "exclude": [
+    "src/frontend/**",
+    "src/vite-env.d.ts",
+    "src/**/*.spec.ts",
+    "src/**/*.test.ts"
+  ]
+}

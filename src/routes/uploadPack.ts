@@ -11,7 +11,7 @@ router.post(
   '/',
   rateLimiter(15, 100),
   requireAuth,
-  requireRole(['admin', 'moderator']),
+  requireRole(['admin']),
   asyncHandler(async (req: AuthRequest, res: Response) => {
     console.log('Reading Pack DB...');
     await packsDB.read();
