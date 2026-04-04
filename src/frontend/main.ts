@@ -544,7 +544,7 @@ async function playSfx(sfxId: string) {
     return;
   }
 
-  const response = await fetch(`/sfx/${encodeURIComponent(sfxId)}/download`);
+  const response = await fetch(`/sfx/${encodeURIComponent(sfxId)}`);
 
   if (!response.ok) {
     const payload = (await response.json().catch(() => null)) as { error?: string } | null;
