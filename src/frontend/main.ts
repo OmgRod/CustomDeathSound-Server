@@ -257,7 +257,6 @@ function renderAuthPanel() {
         <div class="auth-actions">
           <button id="githubLoginBtn" type="button">Login with GitHub</button>
         </div>
-        <p class="meta">Set admin users by editing their <code>role</code> in <code>db/users.json</code>.</p>
       </div>
     `;
 

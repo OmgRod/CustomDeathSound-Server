@@ -6,7 +6,7 @@ import { initDB } from "./db";
 
 dotenv.config();
 
-function isSensitivePath(pathname: string) {
+function isSensitivePath(pathname: string, isProduction: boolean) {
   let decodedPath = pathname;
   try {
     decodedPath = decodeURIComponent(pathname);
@@ -16,6 +16,10 @@ function isSensitivePath(pathname: string) {
 
   if (decodedPath.includes("..")) {
     return true;
+  }
+
+  if (!isProduction && /^\/(src|node_modules)(?:\/|$)/i.test(decodedPath)) {
+    return false;
   }
 
   return /^\/(\.env(?:\.|$)|\.git(?:\/|$)|db(?:\/|$)|src(?:\/|$)|scripts(?:\/|$)|node_modules(?:\/|$)|package(-lock)?\.json$|tsconfig(?:\..+)?\.json$)/i.test(decodedPath);
@@ -64,7 +68,7 @@ async function startServer() {
   app.disable("x-powered-by");
 
   app.use((req: Request, res: Response, next) => {
-    if (isSensitivePath(req.path)) {
+    if (isSensitivePath(req.path, isProduction)) {
       res.status(404).send("Not found");
       return;
     }
@@ -142,6 +146,23 @@ async function startServer() {
 
   app.use(async (req: Request, res: Response, next) => {
     if (req.method !== "GET") {
+      return next();
+    }
+
+    if (req.path.startsWith('/@vite') || req.path.startsWith('/@id') || req.path.startsWith('/@fs')) {
+      return next();
+    }
+
+    if (req.path.startsWith('/src/') || req.path.startsWith('/node_modules/')) {
+      return next();
+    }
+
+    if (path.extname(req.path)) {
+      return next();
+    }
+
+    const acceptsHtml = req.headers.accept?.includes('text/html');
+    if (!acceptsHtml) {
       return next();
     }
 
