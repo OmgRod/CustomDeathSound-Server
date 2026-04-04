@@ -280,11 +280,15 @@ function renderAuthPanel() {
   });
 }
 
-function renderAdminTools() {
+function renderAdminTools(force = false) {
   if (!adminToolsPanel) return;
 
   if (!canManage()) {
     adminToolsPanel.innerHTML = '';
+    return;
+  }
+
+  if (!force && adminToolsPanel.querySelector('#uploadSfxForm') && adminToolsPanel.querySelector('#createPackForm')) {
     return;
   }
 
@@ -425,6 +429,7 @@ async function loadCurrentUser() {
   if (!response.ok) {
     currentUser = null;
     renderAuthPanel();
+    renderAdminTools();
     return;
   }
 
@@ -439,7 +444,6 @@ async function loadDashboard() {
     setStatus('Loading...');
 
     await loadCurrentUser();
-    renderAdminTools();
 
     const [sfxResponse, packResponse] = await Promise.all([
       fetch(`/getTopSFXlist?recent=${recentSort ? 1 : 0}&page=${sfxPage}`),
