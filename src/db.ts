@@ -31,15 +31,8 @@ export interface PackDBSchema {
 }
 
 export interface User {
-  id: string;
-  username: string;
-  githubId?: string;
-  githubUsername?: string;
-  apiKey?: string;
+  githubId: string;
   role: 'admin' | 'moderator' | 'user';
-  createdAt: number;
-  lastLoginAt?: number;
-  loginCount?: number;
 }
 
 export interface UserDBSchema {

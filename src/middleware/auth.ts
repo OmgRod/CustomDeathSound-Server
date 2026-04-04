@@ -5,9 +5,7 @@ import { parseCookieHeader, verifySignedSessionToken } from '../utils/session';
 export interface AuthRequest extends Request {
   user?: {
     id: string;
-    username: string;
-    githubUsername?: string;
-    githubId?: string;
+    githubId: string;
     role: 'admin' | 'moderator' | 'user';
   };
 }
@@ -30,18 +28,15 @@ export const requireAuth = async (
     await usersDB.read();
     const users = usersDB.data?.users || [];
 
-    const user = users.find((u) => u.id === session.userId);
+    const user = users.find((u) => u.githubId === session.userId);
 
     if (!user) {
       res.status(401).json({ error: 'Login required' });
       return;
     }
 
-    const githubUsername = user.githubUsername || user.username;
     req.user = {
-      id: user.id,
-      username: user.username,
-      githubUsername,
+      id: user.githubId,
       githubId: user.githubId,
       role: user.role,
     };

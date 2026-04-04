@@ -1,10 +1,22 @@
 import express, { Request, Response } from 'express';
-import { packsDB } from '../db';
+import { packsDB, sfxDB } from '../db';
 import { asyncHandler } from '../utils/asyncHandler';
 import { requireAuth, requireRole, AuthRequest } from '../middleware/auth';
 import rateLimiter from '../utils/rateLimiter';
 
 const router = express.Router();
+
+router.get(
+    '/',
+    rateLimiter(15, 100),
+    requireAuth,
+    requireRole(['admin']),
+    asyncHandler(async (_req: AuthRequest, res: Response) => {
+        await packsDB.read();
+        const packsList = packsDB.data?.packs || [];
+        return res.status(200).json({ packs: packsList });
+    })
+);
 
 router.get('/:packID', rateLimiter(15, 100), asyncHandler(async (req: Request, res: Response) => {
     const { packID } = req.params;
@@ -72,6 +84,51 @@ router.delete(
         return res.status(200).json({
             message: 'Pack deleted successfully',
             pack: deletedPack,
+        });
+    })
+);
+
+router.put(
+    '/:packID',
+    rateLimiter(15, 100),
+    requireAuth,
+    requireRole(['admin']),
+    asyncHandler(async (req: AuthRequest, res: Response) => {
+        const { packID } = req.params;
+        const { name, ids } = req.body as { name?: string; ids?: string[] };
+
+        if (!name || !Array.isArray(ids) || ids.length === 0) {
+            return res.status(400).json({ error: 'Missing required fields: name and ids (non-empty array of strings)' });
+        }
+
+        await packsDB.read();
+        await sfxDB.read();
+
+        const packsList = packsDB.data?.packs || [];
+        const packIndex = packsList.findIndex(item => String(item.id) === packID);
+        if (packIndex === -1) {
+            return res.status(404).json({ error: 'Pack not found' });
+        }
+
+        const uniqueIds = [...new Set(ids.map((id) => String(id).trim()).filter(Boolean))];
+        const validSfxIds = new Set((sfxDB.data?.sfx || []).map((item) => String(item.id)));
+        const invalidIds = uniqueIds.filter((id) => !validSfxIds.has(id));
+        if (invalidIds.length > 0) {
+            return res.status(400).json({ error: `Invalid SFX IDs: ${invalidIds.join(', ')}` });
+        }
+
+        const existingPack = packsList[packIndex];
+        packsList[packIndex] = {
+            ...existingPack,
+            name: String(name).trim(),
+            ids: uniqueIds,
+        };
+
+        await packsDB.write();
+
+        return res.status(200).json({
+            message: 'Pack updated successfully',
+            pack: packsList[packIndex],
         });
     })
 );

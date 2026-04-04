@@ -30,12 +30,11 @@ type ListResponse<T> = {
 
 type CurrentUser = {
   id: string;
+  githubId: string;
   username: string;
   githubUsername: string;
+  avatarUrl?: string | null;
   role: 'admin' | 'moderator' | 'user';
-  createdAt: number;
-  lastLoginAt: number;
-  loginCount: number;
 };
 
 const app = document.querySelector<HTMLDivElement>('#app');
@@ -125,6 +124,12 @@ let packPage = 1;
 let packTotalPages = 1;
 const frontendActionCooldowns = new Map<string, number>();
 let activeAudio: HTMLAudioElement | null = null;
+let adminPackOptions: PackItem[] = [];
+let packEditorSelectedIds: string[] = [];
+let packEditorEditingPackId: string | null = null;
+let packEditorSearchResults: SfxItem[] = [];
+let packEditorSearchTimer: number | null = null;
+const packEditorSfxMeta = new Map<string, SfxItem>();
 
 function isActionAllowed(actionKey: string, cooldownMs: number) {
   const now = Date.now();
@@ -267,7 +272,6 @@ function renderAuthPanel() {
       <p class="section-label">Signed in</p>
       <h2>${escapeHtml(currentUser.username)}</h2>
       <p class="meta">GitHub: ${escapeHtml(currentUser.githubUsername)} · ${currentUser.role.toUpperCase()}</p>
-      <p class="meta">Logins: ${currentUser.loginCount} · Last seen: ${formatDateTime(currentUser.lastLoginAt)}</p>
       <div class="auth-actions">
         <button id="logoutBtn" type="button" class="button--ghost">Logout</button>
       </div>
@@ -280,17 +284,194 @@ function renderAuthPanel() {
   });
 }
 
-function renderAdminTools(force = false) {
+async function loadAdminPackOptions() {
+  if (!canManage()) {
+    adminPackOptions = [];
+    return;
+  }
+
+  const response = await fetch('/pack');
+  if (!response.ok) {
+    adminPackOptions = [];
+    return;
+  }
+
+  const payload = (await response.json()) as { packs?: PackItem[] };
+  adminPackOptions = Array.isArray(payload.packs) ? payload.packs : [];
+}
+
+function updatePackEditorUiState() {
+  const title = document.querySelector<HTMLElement>('#packEditorTitle');
+  const submitButton = document.querySelector<HTMLButtonElement>('#savePackBtn');
+  const cancelButton = document.querySelector<HTMLButtonElement>('#cancelPackEditBtn');
+
+  if (title) {
+    title.textContent = packEditorEditingPackId ? 'Edit Pack' : 'Create Pack';
+  }
+
+  if (submitButton) {
+    submitButton.textContent = packEditorEditingPackId ? 'Save Pack Changes' : 'Create Pack';
+  }
+
+  if (cancelButton) {
+    cancelButton.hidden = !packEditorEditingPackId;
+  }
+}
+
+function renderPackEditorSelectedList() {
+  const container = document.querySelector<HTMLElement>('#packSelectedSfx');
+  if (!container) return;
+
+  if (packEditorSelectedIds.length === 0) {
+    container.innerHTML = '<p class="empty">No sounds selected yet.</p>';
+    return;
+  }
+
+  container.innerHTML = packEditorSelectedIds
+    .map((id) => {
+      const meta = packEditorSfxMeta.get(id);
+      const label = meta ? `${meta.name} (${meta.id})` : id;
+      return `
+        <div class="picker-item picker-item--row">
+          <span>${escapeHtml(label)}</span>
+          <button type="button" class="button--ghost" data-remove-pack-sfx="${escapeHtml(id)}">Remove</button>
+        </div>
+      `;
+    })
+    .join('');
+
+  container.querySelectorAll<HTMLButtonElement>('[data-remove-pack-sfx]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const id = button.getAttribute('data-remove-pack-sfx');
+      if (!id) return;
+      packEditorSelectedIds = packEditorSelectedIds.filter((value) => value !== id);
+      renderPackEditorSelectedList();
+      renderPackEditorSearchResults();
+    });
+  });
+}
+
+function renderPackEditorSearchResults() {
+  const container = document.querySelector<HTMLElement>('#packSfxSearchResults');
+  if (!container) return;
+
+  const availableResults = packEditorSearchResults.filter((item) => !packEditorSelectedIds.includes(item.id));
+  if (availableResults.length === 0) {
+    container.innerHTML = '<p class="empty">Search by sound name or ID to add items.</p>';
+    return;
+  }
+
+  container.innerHTML = availableResults
+    .map((item) => `
+      <button type="button" class="picker-item" data-add-pack-sfx="${escapeHtml(item.id)}">
+        <span>${escapeHtml(item.name)}</span>
+        <span class="chip">${escapeHtml(item.id)}</span>
+      </button>
+    `)
+    .join('');
+
+  container.querySelectorAll<HTMLButtonElement>('[data-add-pack-sfx]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const id = button.getAttribute('data-add-pack-sfx');
+      if (!id || packEditorSelectedIds.includes(id)) return;
+      const matched = packEditorSearchResults.find((item) => item.id === id);
+      if (matched) {
+        packEditorSfxMeta.set(matched.id, matched);
+      }
+      packEditorSelectedIds.push(id);
+      renderPackEditorSelectedList();
+      renderPackEditorSearchResults();
+    });
+  });
+}
+
+async function hydrateSelectedSfxMeta(ids: string[]) {
+  await Promise.all(ids.map(async (id) => {
+    try {
+      const response = await fetch(`/sfx/${encodeURIComponent(id)}`);
+      if (!response.ok) return;
+      const payload = (await response.json()) as { sfx?: SfxItem };
+      if (payload.sfx) {
+        packEditorSfxMeta.set(payload.sfx.id, payload.sfx);
+      }
+    } catch {
+      // Keep fallback display using ID if a sound cannot be loaded.
+    }
+  }));
+}
+
+async function searchSfxForPackEditor(query: string) {
+  const response = await fetch(`/sfx?query=${encodeURIComponent(query)}&limit=20`);
+  if (!response.ok) {
+    packEditorSearchResults = [];
+    renderPackEditorSearchResults();
+    return;
+  }
+
+  const payload = (await response.json()) as { data?: SfxItem[] };
+  packEditorSearchResults = Array.isArray(payload.data) ? payload.data : [];
+  packEditorSearchResults.forEach((item) => {
+    packEditorSfxMeta.set(item.id, item);
+  });
+  renderPackEditorSearchResults();
+}
+
+async function beginEditingPack(packId: string) {
+  const nameInput = document.querySelector<HTMLInputElement>('#savePackName');
+  const searchInput = document.querySelector<HTMLInputElement>('#packSfxSearch');
+
+  if (!packId) {
+    packEditorEditingPackId = null;
+    packEditorSelectedIds = [];
+    packEditorSfxMeta.clear();
+    packEditorSearchResults = [];
+    if (nameInput) nameInput.value = '';
+    if (searchInput) searchInput.value = '';
+    updatePackEditorUiState();
+    renderPackEditorSelectedList();
+    renderPackEditorSearchResults();
+    return;
+  }
+
+  const matched = adminPackOptions.find((item) => item.id === packId);
+  if (!matched) {
+    setStatus('Pack not found in editor list.');
+    return;
+  }
+
+  packEditorEditingPackId = matched.id;
+  packEditorSelectedIds = [...matched.ids];
+  packEditorSfxMeta.clear();
+  packEditorSearchResults = [];
+  if (nameInput) nameInput.value = matched.name;
+  if (searchInput) searchInput.value = '';
+  await hydrateSelectedSfxMeta(packEditorSelectedIds);
+  updatePackEditorUiState();
+  renderPackEditorSelectedList();
+  renderPackEditorSearchResults();
+}
+
+async function renderAdminTools(force = false) {
   if (!adminToolsPanel) return;
 
   if (!canManage()) {
     adminToolsPanel.innerHTML = '';
+    adminPackOptions = [];
+    packEditorSelectedIds = [];
+    packEditorEditingPackId = null;
+    packEditorSfxMeta.clear();
     return;
   }
 
   if (!force && adminToolsPanel.querySelector('#uploadSfxForm') && adminToolsPanel.querySelector('#createPackForm')) {
     return;
   }
+
+  await loadAdminPackOptions();
+
+  const packOptionsHtml = adminPackOptions
+    .map((pack) => `<option value="${escapeHtml(pack.id)}">${escapeHtml(pack.name)} (${escapeHtml(pack.id)})</option>`)
+    .join('');
 
   adminToolsPanel.innerHTML = `
     <div class="panel__header">
@@ -316,16 +497,31 @@ function renderAdminTools(force = false) {
       </form>
 
       <form id="createPackForm" class="admin-form">
-        <h3>Create Pack</h3>
+        <h3 id="packEditorTitle">Create Pack</h3>
+        <label>
+          Edit existing pack (optional)
+          <select id="packEditorSelect">
+            <option value="">Create a new pack</option>
+            ${packOptionsHtml}
+          </select>
+        </label>
         <label>
           Pack name
-          <input id="createPackName" name="name" type="text" required />
+          <input id="savePackName" name="name" type="text" required />
         </label>
         <label>
-          SFX IDs (comma or newline separated)
-          <textarea id="createPackIds" name="ids" rows="5" placeholder="id-1, id-2"></textarea>
+          Search sounds by name or ID
+          <input id="packSfxSearch" name="sfxSearch" type="text" placeholder="Type to search sounds" autocomplete="off" />
         </label>
-        <button type="submit">Create Pack</button>
+        <div id="packSfxSearchResults" class="picker-list"></div>
+        <div>
+          <p class="section-label">Selected sounds</p>
+          <div id="packSelectedSfx" class="picker-list"></div>
+        </div>
+        <div class="auth-actions">
+          <button id="savePackBtn" type="submit">Create Pack</button>
+          <button id="cancelPackEditBtn" type="button" class="button--ghost" hidden>Cancel Edit</button>
+        </div>
       </form>
     </div>
   `;
@@ -337,8 +533,35 @@ function renderAdminTools(force = false) {
 
   document.querySelector<HTMLFormElement>('#createPackForm')?.addEventListener('submit', (event) => {
     event.preventDefault();
-    void submitCreatePack();
+    void submitSavePack();
   });
+
+  document.querySelector<HTMLSelectElement>('#packEditorSelect')?.addEventListener('change', (event) => {
+    const value = (event.target as HTMLSelectElement).value;
+    void beginEditingPack(value);
+  });
+
+  document.querySelector<HTMLInputElement>('#packSfxSearch')?.addEventListener('input', (event) => {
+    const query = (event.target as HTMLInputElement).value.trim();
+
+    if (packEditorSearchTimer) {
+      window.clearTimeout(packEditorSearchTimer);
+    }
+
+    packEditorSearchTimer = window.setTimeout(() => {
+      void searchSfxForPackEditor(query);
+    }, 200);
+  });
+
+  document.querySelector<HTMLButtonElement>('#cancelPackEditBtn')?.addEventListener('click', () => {
+    const selector = document.querySelector<HTMLSelectElement>('#packEditorSelect');
+    if (selector) selector.value = '';
+    void beginEditingPack('');
+  });
+
+  updatePackEditorUiState();
+  renderPackEditorSelectedList();
+  renderPackEditorSearchResults();
 }
 
 function renderSfx(items: SfxItem[]) {
@@ -403,6 +626,7 @@ function renderPacks(items: PackItem[]) {
                 <p class="resource-card__meta">${escapeHtml(item.ids.join(', '))}</p>
               </div>
               <div class="resource-card__actions">
+                ${canManage() ? `<button type="button" data-edit-pack="${escapeHtml(item.id)}">Edit</button>` : ''}
                 ${canManage() ? `<button type="button" data-delete-pack="${escapeHtml(item.id)}">Delete</button>` : ''}
               </div>
             </article>
@@ -412,6 +636,22 @@ function renderPacks(items: PackItem[]) {
     : `<p class="empty">No packs found on this page.</p>`;
 
   if (canManage()) {
+    packList.querySelectorAll<HTMLButtonElement>('[data-edit-pack]').forEach((button) => {
+      button.addEventListener('click', () => {
+        const packId = button.getAttribute('data-edit-pack');
+        if (!packId) return;
+
+        const selector = document.querySelector<HTMLSelectElement>('#packEditorSelect');
+        if (selector) {
+          selector.value = packId;
+        }
+
+        void beginEditingPack(packId).then(() => {
+          document.querySelector<HTMLElement>('#adminToolsPanel')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        });
+      });
+    });
+
     packList.querySelectorAll<HTMLButtonElement>('[data-delete-pack]').forEach((button) => {
       button.addEventListener('click', () => {
         const packId = button.getAttribute('data-delete-pack');
@@ -429,14 +669,14 @@ async function loadCurrentUser() {
   if (!response.ok) {
     currentUser = null;
     renderAuthPanel();
-    renderAdminTools();
+    await renderAdminTools();
     return;
   }
 
   const payload = (await response.json()) as { user: CurrentUser };
   currentUser = payload.user;
   renderAuthPanel();
-  renderAdminTools();
+  await renderAdminTools();
 }
 
 async function loadDashboard() {
@@ -585,12 +825,8 @@ async function logout() {
   await fetch('/auth/logout', { method: 'POST' });
   currentUser = null;
   renderAuthPanel();
-  renderAdminTools();
+  await renderAdminTools(true);
   await loadDashboard();
-}
-
-function parseIds(raw: string) {
-  return [...new Set(raw.split(/[\n,]/).map((entry) => entry.trim()).filter(Boolean))];
 }
 
 async function submitUploadSfx() {
@@ -636,9 +872,9 @@ async function submitUploadSfx() {
   await loadDashboard();
 }
 
-async function submitCreatePack() {
+async function submitSavePack() {
   if (!canManage()) {
-    setStatus('Only admins can create packs.');
+    setStatus('Only admins can manage packs.');
     return;
   }
 
@@ -646,19 +882,25 @@ async function submitCreatePack() {
     return;
   }
 
-  const nameInput = document.querySelector<HTMLInputElement>('#createPackName');
-  const idsInput = document.querySelector<HTMLTextAreaElement>('#createPackIds');
+  const nameInput = document.querySelector<HTMLInputElement>('#savePackName');
+  const selector = document.querySelector<HTMLSelectElement>('#packEditorSelect');
 
   const name = nameInput?.value.trim() ?? '';
-  const ids = parseIds(idsInput?.value ?? '');
+  const ids = [...new Set(packEditorSelectedIds.map((entry) => entry.trim()).filter(Boolean))];
 
   if (!name || ids.length === 0) {
-    setStatus('Pack creation requires a name and at least one SFX ID.');
+    setStatus('Pack requires a name and at least one selected sound.');
     return;
   }
 
-  const response = await fetch('/uploadPack', {
-    method: 'POST',
+  const isEditing = Boolean(packEditorEditingPackId);
+  const endpoint = isEditing
+    ? `/pack/${encodeURIComponent(packEditorEditingPackId as string)}`
+    : '/uploadPack';
+  const method = isEditing ? 'PUT' : 'POST';
+
+  const response = await fetch(endpoint, {
+    method,
     headers: {
       'Content-Type': 'application/json',
     },
@@ -667,14 +909,19 @@ async function submitCreatePack() {
 
   if (!response.ok) {
     const payload = (await response.json().catch(() => null)) as { error?: string } | null;
-    setStatus(payload?.error ?? 'Failed to create pack.');
+    setStatus(payload?.error ?? `Failed to ${isEditing ? 'save' : 'create'} pack.`);
     return;
   }
 
-  setStatus('Pack created successfully.');
+  setStatus(`Pack ${isEditing ? 'updated' : 'created'} successfully.`);
   if (nameInput) nameInput.value = '';
-  if (idsInput) idsInput.value = '';
+  if (selector) selector.value = '';
+  packEditorEditingPackId = null;
+  packEditorSelectedIds = [];
+  packEditorSearchResults = [];
+  packEditorSfxMeta.clear();
   packPage = 1;
+  await renderAdminTools(true);
   await loadDashboard();
 }
 

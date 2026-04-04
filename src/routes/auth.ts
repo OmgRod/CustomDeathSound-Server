@@ -15,6 +15,7 @@ type GitHubProfile = {
   id: number;
   login: string;
   name?: string | null;
+  avatar_url?: string;
 };
 
 function getBaseUrl(req: Request) {
@@ -104,6 +105,15 @@ async function fetchGithubProfile(accessToken: string) {
   });
 }
 
+async function fetchGithubProfileById(githubId: string) {
+  return requestJson<GitHubProfile>(`https://api.github.com/user/${encodeURIComponent(githubId)}`, {
+    headers: {
+      Accept: 'application/json',
+      'User-Agent': 'CustomDeathSounds-Server',
+    },
+  });
+}
+
 function setCookieHeaders(name: string, value: string, maxAgeSeconds: number) {
   return serializeCookie(name, value, {
     httpOnly: true,
@@ -148,12 +158,11 @@ router.get('/github/callback', asyncHandler(async (req: Request, res: Response) 
   const user = await upsertGithubUser({
     githubId: String(profile.id),
     githubUsername: profile.login,
-    displayName: profile.name ?? profile.login,
   });
 
   const sessionSecret = process.env['SESSION_SECRET'] || 'dev-session-secret';
   const sessionToken = createSignedSessionToken({
-    userId: user.id,
+    userId: user.githubId,
     issuedAt: Math.floor(Date.now() / 1000),
     expiresAt: Math.floor(Date.now() / 1000) + SESSION_MAX_AGE_SECONDS,
   }, sessionSecret);
@@ -177,20 +186,29 @@ router.get('/me', asyncHandler(async (req: AuthRequest, res: Response) => {
   }
 
   await usersDB.read();
-  const user = usersDB.data?.users.find((item) => item.id === session.userId);
+  const user = usersDB.data?.users.find((item) => item.githubId === session.userId);
   if (!user) {
     return res.status(401).json({ error: 'Not logged in' });
   }
 
+  let profile: GitHubProfile | null = null;
+  try {
+    profile = await fetchGithubProfileById(user.githubId);
+  } catch {
+    profile = null;
+  }
+
+  const githubUsername = profile?.login || user.githubId;
+  const username = (profile?.name || githubUsername).trim();
+
   return res.status(200).json({
     user: {
-      id: user.id,
-      username: user.username,
-      githubUsername: user.githubUsername ?? user.username,
+      id: user.githubId,
+      githubId: user.githubId,
+      username,
+      githubUsername,
+      avatarUrl: profile?.avatar_url || null,
       role: user.role,
-      createdAt: user.createdAt,
-      lastLoginAt: user.lastLoginAt ?? user.createdAt,
-      loginCount: user.loginCount ?? 1,
     },
   });
 }));

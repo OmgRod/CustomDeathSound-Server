@@ -1,9 +1,56 @@
 import { Router, Response } from 'express';
+import https from 'https';
 import { asyncHandler } from '../utils/asyncHandler';
 import { usersDB } from '../db';
 import { requireAuth, requireRole, AuthRequest } from '../middleware/auth';
 
 const router = Router();
+
+type GitHubProfile = {
+  id: number;
+  login: string;
+  name?: string | null;
+  avatar_url?: string;
+};
+
+function requestJson<T>(url: string, options: https.RequestOptions = {}): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const request = https.request(url, {
+      method: options.method ?? 'GET',
+      headers: options.headers,
+    }, (response) => {
+      let raw = '';
+      response.setEncoding('utf8');
+      response.on('data', (chunk) => {
+        raw += chunk;
+      });
+      response.on('end', () => {
+        if ((response.statusCode ?? 500) >= 400) {
+          reject(new Error(raw || `Request failed with status ${response.statusCode}`));
+          return;
+        }
+
+        try {
+          resolve(JSON.parse(raw) as T);
+        } catch (error) {
+          reject(error);
+        }
+      });
+    });
+
+    request.on('error', reject);
+    request.end();
+  });
+}
+
+async function fetchGithubProfileById(githubId: string) {
+  return requestJson<GitHubProfile>(`https://api.github.com/user/${encodeURIComponent(githubId)}`, {
+    headers: {
+      Accept: 'application/json',
+      'User-Agent': 'CustomDeathSounds-Server',
+    },
+  });
+}
 
 // List all users (admin only)
 router.get(
@@ -13,18 +60,31 @@ router.get(
   asyncHandler(async (req: AuthRequest, res: Response) => {
     await usersDB.read();
     const users = usersDB.data?.users || [];
-    
-    const sanitizedUsers = users.map(u => ({
-      id: u.id,
-      username: u.username,
-      githubUsername: u.githubUsername ?? u.username,
-      role: u.role,
-      createdAt: u.createdAt,
-      lastLoginAt: u.lastLoginAt ?? u.createdAt,
-      loginCount: u.loginCount ?? 1,
+
+    const enrichedUsers = await Promise.all(users.map(async (u) => {
+      try {
+        const profile = await fetchGithubProfileById(u.githubId);
+        return {
+          id: u.githubId,
+          githubId: u.githubId,
+          username: (profile.name || profile.login).trim(),
+          githubUsername: profile.login,
+          avatarUrl: profile.avatar_url || null,
+          role: u.role,
+        };
+      } catch {
+        return {
+          id: u.githubId,
+          githubId: u.githubId,
+          username: u.githubId,
+          githubUsername: u.githubId,
+          avatarUrl: null,
+          role: u.role,
+        };
+      }
     }));
 
-    res.status(200).json({ users: sanitizedUsers });
+    res.status(200).json({ users: enrichedUsers });
   })
 );
 
@@ -42,13 +102,13 @@ router.delete(
       return res.status(404).json({ error: 'User not found' });
     }
 
-    const userIndex = usersDB.data.users.findIndex(u => u.id === userId);
+    const userIndex = usersDB.data.users.findIndex(u => u.githubId === userId);
     if (userIndex === -1) {
       return res.status(404).json({ error: 'User not found' });
     }
 
     // Prevent deleting yourself
-    if (req.user?.id === userId) {
+    if (req.user?.githubId === userId) {
       return res.status(400).json({ error: 'Cannot delete your own account' });
     }
 
@@ -58,7 +118,7 @@ router.delete(
 
     res.status(200).json({
       message: 'User deleted successfully',
-      username: deletedUser.username,
+      githubId: deletedUser.githubId,
     });
   })
 );

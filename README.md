@@ -7,6 +7,7 @@ Server for managing custom death sound effects with GitHub login and a Vite-base
 - Upload and manage sound effects (SFX) and sound packs
 - Role-based access control through GitHub login
 - Automatic user creation on first GitHub login
+- Minimal user storage (`githubId` + `role`), with profile data fetched from GitHub API when needed
 - Rate limiting and file size restrictions
 - Profanity filtering
 
@@ -32,6 +33,10 @@ SESSION_SECRET=long-random-secret
 4. Start the server once and log in with GitHub.
 
 5. Promote admins by editing [db/users.json](db/users.json) and setting `role` to `admin` for the desired users.
+
+	`db/users.json` stores only:
+	- `githubId`
+	- `role`
 
 6. Start the server:
 ```bash
@@ -100,10 +105,38 @@ POST /uploadPack
 Body: {"name": "pack name", "ids": ["sfx-id-1", "sfx-id-2"]}
 ```
 
+### Update Pack (Admin Only)
+```bash
+PUT /pack/:packID
+Body: {"name": "pack name", "ids": ["sfx-id-1", "sfx-id-2"]}
+```
+
+### List Packs For Editor (Admin Only)
+```bash
+GET /pack
+```
+
+### Search SFX (Public)
+```bash
+GET /sfx?query=searchTerm&limit=20
+```
+
 ### Get SFX (Public)
 ```bash
 GET /sfx/:sfxID
 ```
+
+### Record SFX Download (Public)
+```bash
+GET /sfx/:sfxID/download
+```
+
+### Verify SFX File Exists (Admin Only)
+```bash
+GET /sfx/:sfxID/file-status
+```
+
+Returns whether the backing file currently exists in `public/sounds`.
 
 ### Get Pack (Public)
 ```bash
@@ -114,6 +147,8 @@ GET /pack/:packID
 ```bash
 DELETE /sfx/:sfxID
 ```
+
+Response includes `fileDeleted` to indicate whether the sound file was physically removed from `public/sounds`.
 
 ### Delete Pack (Admin Only)
 ```bash
