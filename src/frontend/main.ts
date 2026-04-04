@@ -65,15 +65,15 @@ app.innerHTML = `
             <h2>Sounds</h2>
           </div>
           <div class="panel__actions">
-            <button id="refreshBtn">Refresh</button>
-            <button id="toggleRecentBtn" class="button--ghost">Sort: Recent</button>
+            <button id="refreshBtn" type="button">Refresh</button>
+            <button id="toggleRecentBtn" type="button" class="button--ghost">Sort: Recent</button>
           </div>
         </div>
         <div id="sfxList" class="card-list"></div>
         <div class="pagination-row" id="sfxPagination">
-          <button id="sfxPrevBtn" class="button--ghost">Prev</button>
+          <button id="sfxPrevBtn" type="button" class="button--ghost">Prev</button>
           <span id="sfxPageInfo" class="pill">Page 1 / 1</span>
-          <button id="sfxNextBtn" class="button--ghost">Next</button>
+          <button id="sfxNextBtn" type="button" class="button--ghost">Next</button>
         </div>
       </section>
 
@@ -87,9 +87,9 @@ app.innerHTML = `
         </div>
         <div id="packList" class="card-list"></div>
         <div class="pagination-row" id="packPagination">
-          <button id="packPrevBtn" class="button--ghost">Prev</button>
+          <button id="packPrevBtn" type="button" class="button--ghost">Prev</button>
           <span id="packPageInfo" class="pill">Page 1 / 1</span>
-          <button id="packNextBtn" class="button--ghost">Next</button>
+          <button id="packNextBtn" type="button" class="button--ghost">Next</button>
         </div>
       </section>
 
@@ -124,6 +124,7 @@ let sfxTotalPages = 1;
 let packPage = 1;
 let packTotalPages = 1;
 const frontendActionCooldowns = new Map<string, number>();
+let activeAudio: HTMLAudioElement | null = null;
 
 function isActionAllowed(actionKey: string, cooldownMs: number) {
   const now = Date.now();
@@ -249,7 +250,7 @@ function renderAuthPanel() {
         <h2>Use GitHub to get in.</h2>
         <p class="meta">Users are created automatically when they log in. Browse is open once you're signed in.</p>
         <div class="auth-actions">
-          <button id="githubLoginBtn">Login with GitHub</button>
+          <button id="githubLoginBtn" type="button">Login with GitHub</button>
         </div>
         <p class="meta">Set admin users by editing their <code>role</code> in <code>db/users.json</code>.</p>
       </div>
@@ -268,7 +269,7 @@ function renderAuthPanel() {
       <p class="meta">GitHub: ${escapeHtml(currentUser.githubUsername)} · ${currentUser.role.toUpperCase()}</p>
       <p class="meta">Logins: ${currentUser.loginCount} · Last seen: ${formatDateTime(currentUser.lastLoginAt)}</p>
       <div class="auth-actions">
-        <button id="logoutBtn" class="button--ghost">Logout</button>
+        <button id="logoutBtn" type="button" class="button--ghost">Logout</button>
       </div>
       <p class="meta">${currentUser.role === 'admin' ? 'Admin tools are enabled.' : 'Read-only access only.'}</p>
     </div>
@@ -353,14 +354,22 @@ function renderSfx(items: SfxItem[]) {
                 <p class="resource-card__meta">${escapeHtml(item.url)}</p>
               </div>
               <div class="resource-card__actions">
-                <a class="button button--ghost" href="${item.url}" target="_blank" rel="noreferrer">Play</a>
-                ${canManage() ? `<button data-delete-sfx="${escapeHtml(item.id)}">Delete</button>` : ''}
+                <button type="button" class="button button--ghost" data-play-sfx="${escapeHtml(item.id)}">Play</button>
+                ${canManage() ? `<button type="button" data-delete-sfx="${escapeHtml(item.id)}">Delete</button>` : ''}
               </div>
             </article>
           `,
         )
         .join('')
     : `<p class="empty">No sounds found on this page.</p>`;
+
+  sfxList.querySelectorAll<HTMLButtonElement>('[data-play-sfx]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const sfxId = button.getAttribute('data-play-sfx');
+      if (!sfxId) return;
+      void playSfx(sfxId);
+    });
+  });
 
   if (canManage()) {
     sfxList.querySelectorAll<HTMLButtonElement>('[data-delete-sfx]').forEach((button) => {
@@ -390,8 +399,7 @@ function renderPacks(items: PackItem[]) {
                 <p class="resource-card__meta">${escapeHtml(item.ids.join(', '))}</p>
               </div>
               <div class="resource-card__actions">
-                <button data-download-pack="${escapeHtml(item.id)}">Download</button>
-                ${canManage() ? `<button data-delete-pack="${escapeHtml(item.id)}">Delete</button>` : ''}
+                ${canManage() ? `<button type="button" data-delete-pack="${escapeHtml(item.id)}">Delete</button>` : ''}
               </div>
             </article>
           `,
@@ -409,13 +417,6 @@ function renderPacks(items: PackItem[]) {
     });
   }
 
-  packList.querySelectorAll<HTMLButtonElement>('[data-download-pack]').forEach((button) => {
-    button.addEventListener('click', () => {
-      const packId = button.getAttribute('data-download-pack');
-      if (!packId) return;
-      void downloadPack(packId);
-    });
-  });
 }
 
 async function loadCurrentUser() {
@@ -534,20 +535,41 @@ async function deletePack(packId: string) {
   await loadDashboard();
 }
 
-async function downloadPack(packId: string) {
-  if (!isActionAllowed(`download-pack:${packId}`, 1500)) {
+async function playSfx(sfxId: string) {
+  if (!isActionAllowed(`play-sfx:${sfxId}`, 1000)) {
     return;
   }
 
-  const response = await fetch(`/pack/${encodeURIComponent(packId)}/download`);
+  const response = await fetch(`/sfx/${encodeURIComponent(sfxId)}/download`);
 
   if (!response.ok) {
     const payload = (await response.json().catch(() => null)) as { error?: string } | null;
-    setStatus(payload?.error ?? 'Failed to record pack download.');
+    setStatus(payload?.error ?? 'Failed to load SFX.');
     return;
   }
 
-  setStatus('Pack download recorded.');
+  const payload = (await response.json()) as { sfx?: SfxItem };
+  const sfxUrl = payload.sfx?.url;
+
+  if (!sfxUrl) {
+    setStatus('SFX URL is missing.');
+    return;
+  }
+
+  if (!activeAudio) {
+    activeAudio = new Audio();
+  }
+
+  activeAudio.pause();
+  activeAudio.src = sfxUrl;
+
+  try {
+    await activeAudio.play();
+    setStatus('Playing sound.');
+  } catch {
+    setStatus('Unable to play this sound right now.');
+  }
+
   await loadDashboard();
 }
 

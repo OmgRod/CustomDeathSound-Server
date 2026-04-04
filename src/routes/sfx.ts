@@ -23,6 +23,24 @@ router.get('/:sfxID', rateLimiter(15, 100), asyncHandler(async (req: Request, re
     res.status(200).json({ sfx });
 }));
 
+router.get('/:sfxID/download', rateLimiter(15, 100), asyncHandler(async (req: Request, res: Response) => {
+    const id = req.params.sfxID;
+    await sfxDB.read();
+        const sfxList = sfxDB.data?.sfx ?? [];
+        const index = sfxList.findIndex((item) => item.id === id);
+
+        if (index === -1) {
+                return res.status(404).json({ error: 'SFX not found.' });
+        }
+
+        const current = sfxList[index];
+        const nextDownloads = Number.isFinite(current.downloads) ? current.downloads + 1 : 1;
+        sfxList[index] = { ...current, downloads: nextDownloads };
+        await sfxDB.write();
+
+        return res.status(200).json({ sfx: sfxList[index] });
+}));
+
 router.delete(
     '/:sfxID',
     rateLimiter(15, 100),

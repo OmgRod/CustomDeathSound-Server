@@ -72,9 +72,6 @@ async function startServer() {
     next();
   });
 
-  const downloadHandler = (await import("./utils/downloadHandler")).default;
-  app.use(downloadHandler);
-
   app.use(express.json());
 
   const staticOptions = {
