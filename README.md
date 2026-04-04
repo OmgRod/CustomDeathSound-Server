@@ -144,6 +144,13 @@ PUT /sfx/:sfxID
 Body: {"name": "new name", "downloads": 0, "tags": ["long", "loud"]}
 ```
 
+`PUT /sfx/:sfxID` is available to admins and moderators. Manual tag changes are written to `db/tagAudit.json`.
+
+### View SFX Tag Audit (Admin/Moderator)
+```bash
+GET /sfx/:sfxID/tag-audit
+```
+
 ### Record SFX Download (Public)
 ```bash
 GET /sfx/:sfxID/download
@@ -174,6 +181,7 @@ Applies tags automatically:
 
 The macro replaces the entire tags array with the computed result for each sound.
 Any tags that no longer apply are removed as part of the same pass.
+If a moderator has manually changed tags for a sound, that sound is skipped by the macro and not overridden.
 
 ### Get Pack (Public)
 ```bash

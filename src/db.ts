@@ -40,6 +40,22 @@ export interface UserDBSchema {
   users: User[];
 }
 
+export interface TagAuditEntry {
+  id: string;
+  sfxId: string;
+  actorId: string;
+  actorRole: 'admin' | 'moderator' | 'user';
+  action: 'manual-tag-update';
+  addedTags: string[];
+  removedTags: string[];
+  resultingTags: string[];
+  createdAt: number;
+}
+
+export interface TagAuditDBSchema {
+  entries: TagAuditEntry[];
+}
+
 const sfxFile = path.join(__dirname, '../db/sfx.json');
 const sfxAdapter = new JSONFile<SFXDBSchema>(sfxFile);
 const sfxDB = new Low<SFXDBSchema>(sfxAdapter, { sfx: [] });
@@ -51,6 +67,10 @@ const packsDB = new Low<PackDBSchema>(packsAdapter, { packs: [] });
 const usersFile = path.join(__dirname, '../db/users.json');
 const usersAdapter = new JSONFile<UserDBSchema>(usersFile);
 const usersDB = new Low<UserDBSchema>(usersAdapter, { users: [] });
+
+const tagAuditFile = path.join(__dirname, '../db/tagAudit.json');
+const tagAuditAdapter = new JSONFile<TagAuditDBSchema>(tagAuditFile);
+const tagAuditDB = new Low<TagAuditDBSchema>(tagAuditAdapter, { entries: [] });
 
 export async function initDB() {
   await sfxDB.read();
@@ -87,6 +107,12 @@ export async function initDB() {
     usersDB.data = { users: [] };
     await usersDB.write();
   }
+
+  await tagAuditDB.read();
+  if (!tagAuditDB.data) {
+    tagAuditDB.data = { entries: [] };
+    await tagAuditDB.write();
+  }
 }
 
-export { sfxDB, packsDB, usersDB };
+export { sfxDB, packsDB, usersDB, tagAuditDB };

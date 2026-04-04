@@ -4,10 +4,11 @@ import path from 'path';
 import ffmpegInstaller from '@ffmpeg-installer/ffmpeg';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
-import { sfxDB } from '../db';
+import { sfxDB, tagAuditDB } from '../db';
 import { asyncHandler } from '../utils/asyncHandler';
 import { requireAuth, requireRole, AuthRequest } from '../middleware/auth';
 import rateLimiter from '../utils/rateLimiter';
+import { v4 as uuidv4 } from 'uuid';
 
 const router = express.Router();
 const execFileAsync = promisify(execFile);
@@ -119,17 +120,29 @@ router.post(
     requireRole(['admin']),
     asyncHandler(async (_req: AuthRequest, res: Response) => {
         await sfxDB.read();
+        await tagAuditDB.read();
         const sfxList = sfxDB.data?.sfx || [];
         const soundsDir = path.join(__dirname, '../../public/sounds');
+        const moderatorProtectedIds = new Set(
+            (tagAuditDB.data?.entries || [])
+                .filter((entry) => entry.actorRole === 'moderator' && (entry.addedTags.length > 0 || entry.removedTags.length > 0))
+                .map((entry) => entry.sfxId),
+        );
 
         const thresholdDbFs = 0;
         let updatedCount = 0;
         let removedTagsCount = 0;
         let longCount = 0;
         let loudCount = 0;
+        const skippedModeratorProtected: string[] = [];
         const failed: Array<{ id: string; reason: string }> = [];
 
         for (const item of sfxList) {
+            if (moderatorProtectedIds.has(item.id)) {
+                skippedModeratorProtected.push(item.id);
+                continue;
+            }
+
             const filePath = path.join(soundsDir, path.basename(item.url));
 
             try {
@@ -183,10 +196,35 @@ router.post(
             removedTagsCount,
             longCount,
             loudCount,
+            skippedModeratorProtectedCount: skippedModeratorProtected.length,
+            skippedModeratorProtected,
             failedCount: failed.length,
             failed,
             note: 'The macro replaces the full tags array with the computed tags for each sound.',
         });
+    })
+);
+
+router.get(
+    '/:sfxID/tag-audit',
+    rateLimiter(15, 100),
+    requireAuth,
+    requireRole(['admin', 'moderator']),
+    asyncHandler(async (req: AuthRequest, res: Response) => {
+        const { sfxID } = req.params;
+
+        await sfxDB.read();
+        const sfxExists = (sfxDB.data?.sfx || []).some((item) => String(item.id) === sfxID);
+        if (!sfxExists) {
+            return res.status(404).json({ error: 'SFX not found' });
+        }
+
+        await tagAuditDB.read();
+        const entries = (tagAuditDB.data?.entries || [])
+            .filter((entry) => entry.sfxId === sfxID)
+            .sort((a, b) => b.createdAt - a.createdAt);
+
+        return res.status(200).json({ entries });
     })
 );
 
@@ -329,12 +367,13 @@ router.put(
     '/:sfxID',
     rateLimiter(15, 100),
     requireAuth,
-    requireRole(['admin']),
+    requireRole(['admin', 'moderator']),
     asyncHandler(async (req: AuthRequest, res: Response) => {
         const { sfxID } = req.params;
         const { name, downloads, tags } = req.body as { name?: string; downloads?: number; tags?: string[] };
 
         await sfxDB.read();
+        await tagAuditDB.read();
         const sfxList = sfxDB.data?.sfx || [];
         const index = sfxList.findIndex((item) => String(item.id) === sfxID);
         if (index === -1) {
@@ -352,6 +391,9 @@ router.put(
             nextTags = [...new Set(tags.map((item) => String(item).trim().toLowerCase()).filter(Boolean))];
         }
 
+        const normalizedCurrentTags = [...new Set((Array.isArray(current.tags) ? current.tags : []).map((item) => String(item).trim().toLowerCase()).filter(Boolean))].sort();
+        const normalizedNextTags = [...new Set(nextTags)].sort();
+
         sfxList[index] = {
             ...current,
             name: nextName,
@@ -360,6 +402,24 @@ router.put(
         };
 
         await sfxDB.write();
+
+        if (JSON.stringify(normalizedCurrentTags) !== JSON.stringify(normalizedNextTags)) {
+            const addedTags = normalizedNextTags.filter((tag) => !normalizedCurrentTags.includes(tag));
+            const removedTags = normalizedCurrentTags.filter((tag) => !normalizedNextTags.includes(tag));
+
+            tagAuditDB.data?.entries.push({
+                id: uuidv4(),
+                sfxId: current.id,
+                actorId: req.user?.githubId || 'unknown',
+                actorRole: req.user?.role || 'user',
+                action: 'manual-tag-update',
+                addedTags,
+                removedTags,
+                resultingTags: normalizedNextTags,
+                createdAt: Math.floor(Date.now() / 1000),
+            });
+            await tagAuditDB.write();
+        }
 
         return res.status(200).json({
             message: 'SFX updated successfully',

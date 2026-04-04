@@ -32,6 +32,7 @@ async function ensureDirectoriesAndFiles() {
   const sfxJsonPath = path.join(dbDir, "sfx.json");
   const packsJsonPath = path.join(dbDir, "packs.json");
   const usersJsonPath = path.join(dbDir, "users.json");
+  const tagAuditJsonPath = path.join(dbDir, "tagAudit.json");
 
   if (!fs.existsSync(publicDir)) {
     fs.mkdirSync(publicDir);
@@ -51,8 +52,11 @@ async function ensureDirectoriesAndFiles() {
   if (!fs.existsSync(usersJsonPath)) {
     fs.writeFileSync(usersJsonPath, JSON.stringify({ users: [] }, null, 2));
   }
+  if (!fs.existsSync(tagAuditJsonPath)) {
+    fs.writeFileSync(tagAuditJsonPath, JSON.stringify({ entries: [] }, null, 2));
+  }
 
-  return { publicDir, soundsDir, dbDir, sfxJsonPath, packsJsonPath, usersJsonPath };
+  return { publicDir, soundsDir, dbDir, sfxJsonPath, packsJsonPath, usersJsonPath, tagAuditJsonPath };
 }
 
 async function startServer() {
