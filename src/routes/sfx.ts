@@ -1,50 +1,14 @@
 import express, { Request, Response } from 'express';
 import fs from 'fs/promises';
 import path from 'path';
-import ffmpegInstaller from '@ffmpeg-installer/ffmpeg';
-import { execFile } from 'child_process';
-import { promisify } from 'util';
 import { sfxDB, tagAuditDB } from '../db';
 import { asyncHandler } from '../utils/asyncHandler';
 import { requireAuth, requireRole, AuthRequest } from '../middleware/auth';
 import rateLimiter from '../utils/rateLimiter';
 import { v4 as uuidv4 } from 'uuid';
+import { analyzeAudioFile, computeAutoTags, normalizeLengthSeconds } from '../utils/audioAnalysis';
 
 const router = express.Router();
-const execFileAsync = promisify(execFile);
-
-async function analyzeAudioFile(filePath: string) {
-    const nullSink = process.platform === 'win32' ? 'NUL' : '/dev/null';
-
-    const { stderr } = await execFileAsync(ffmpegInstaller.path, [
-        '-hide_banner',
-        '-i',
-        filePath,
-        '-af',
-        'volumedetect',
-        '-f',
-        'null',
-        nullSink,
-    ], { maxBuffer: 10 * 1024 * 1024 });
-
-    const durationMatch = stderr.match(/Duration:\s*(\d{2}):(\d{2}):(\d{2}(?:\.\d+)?)/i);
-    const maxVolumeMatch = stderr.match(/max_volume:\s*(-?\d+(?:\.\d+)?)\s*dB/i);
-
-    let durationSeconds = 0;
-    if (durationMatch) {
-        const hours = Number(durationMatch[1]);
-        const minutes = Number(durationMatch[2]);
-        const seconds = Number(durationMatch[3]);
-        durationSeconds = (hours * 3600) + (minutes * 60) + seconds;
-    }
-
-    const peakDbFs = maxVolumeMatch ? Number(maxVolumeMatch[1]) : Number.NaN;
-
-    return {
-        durationSeconds,
-        peakDbFs,
-    };
-}
 
 function parseSearchParams(req: Request) {
     const query = String(req.query.query ?? '').trim().toLowerCase();
@@ -157,15 +121,8 @@ router.post(
 
             try {
                 const analysis = await analyzeAudioFile(filePath);
-                const nextTags: string[] = [];
-
-                if (analysis.durationSeconds > 3) {
-                    nextTags.push('long');
-                }
-
-                if (Number.isFinite(analysis.peakDbFs) && analysis.peakDbFs >= thresholdDbFs) {
-                    nextTags.push('loud');
-                }
+                item.lengthSeconds = normalizeLengthSeconds(analysis.durationSeconds);
+                const nextTags = computeAutoTags(analysis, thresholdDbFs);
 
                 if (nextTags.includes('long')) {
                     longCount += 1;
@@ -201,6 +158,55 @@ router.post(
             failedCount: failed.length,
             failed,
             note: 'The macro replaces the full tags array with the computed tags for each sound.',
+        });
+    })
+);
+
+router.post(
+    '/admin/macros/calculate-lengths',
+    rateLimiter(10, 100),
+    requireAuth,
+    requireRole(['admin']),
+    asyncHandler(async (_req: AuthRequest, res: Response) => {
+        await sfxDB.read();
+        const sfxList = sfxDB.data?.sfx || [];
+        const soundsDir = path.join(__dirname, '../../public/sounds');
+
+        let updatedCount = 0;
+        const failed: Array<{ id: string; reason: string }> = [];
+
+        for (const item of sfxList) {
+            const filePath = path.join(soundsDir, path.basename(item.url));
+
+            try {
+                await fs.access(filePath);
+            } catch (error) {
+                if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+                    failed.push({ id: item.id, reason: 'file-missing' });
+                    continue;
+                }
+                throw error;
+            }
+
+            try {
+                const analysis = await analyzeAudioFile(filePath);
+                const nextLength = normalizeLengthSeconds(analysis.durationSeconds);
+                if (item.lengthSeconds !== nextLength) {
+                    item.lengthSeconds = nextLength;
+                    updatedCount += 1;
+                }
+            } catch (error) {
+                failed.push({ id: item.id, reason: error instanceof Error ? error.message : 'analyze-failed' });
+            }
+        }
+
+        await sfxDB.write();
+
+        return res.status(200).json({
+            message: 'Length macro completed.',
+            updatedCount,
+            failedCount: failed.length,
+            failed,
         });
     })
 );

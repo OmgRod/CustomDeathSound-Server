@@ -7,6 +7,7 @@ export interface SFX {
   name: string;
   url: string;
   tags: string[];
+  lengthSeconds: number;
   downloads: number;
   likes: number;
   dislikes: number;
@@ -81,15 +82,24 @@ export async function initDB() {
   }
 
   sfxDB.data.sfx = sfxDB.data.sfx.map((item) => {
+    const normalized = { ...item } as SFX;
+    let touched = false;
+
     if (!Array.isArray((item as { tags?: string[] }).tags)) {
-      sfxTouched = true;
-      return {
-        ...item,
-        tags: [],
-      };
+      normalized.tags = [];
+      touched = true;
     }
 
-    return item;
+    if (!Number.isFinite((item as { lengthSeconds?: number }).lengthSeconds)) {
+      normalized.lengthSeconds = 0;
+      touched = true;
+    }
+
+    if (touched) {
+      sfxTouched = true;
+    }
+
+    return normalized;
   });
 
   if (sfxTouched) {

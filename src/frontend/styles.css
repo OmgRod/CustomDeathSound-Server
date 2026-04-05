@@ -317,6 +317,17 @@ button:disabled {
   color: var(--muted);
 }
 
+.admin-form .inline-option {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+}
+
+.admin-form .inline-option input {
+  width: auto;
+  margin: 0;
+}
+
 .picker-list {
   display: grid;
   gap: 0.55rem;

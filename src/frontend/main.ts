@@ -5,6 +5,7 @@ type SfxItem = {
   name: string;
   url: string;
   tags: string[];
+  lengthSeconds: number;
   downloads: number;
   likes: number;
   dislikes: number;
@@ -256,6 +257,14 @@ function formatDate(timestamp: number) {
     month: 'short',
     day: 'numeric',
   });
+}
+
+function formatLength(seconds: number) {
+  if (!Number.isFinite(seconds) || seconds <= 0) {
+    return '0.00s';
+  }
+
+  return `${seconds.toFixed(2)}s`;
 }
 
 function formatDateTime(timestamp: number) {
@@ -601,6 +610,7 @@ async function renderAdminTools(force = false) {
     <div class="admin-macro-row">
       <button id="macroDeleteMissingBtn" type="button" class="button--ghost">Macro: Delete Missing-File SFX</button>
       <button id="macroAutoTagBtn" type="button" class="button--ghost">Macro: Auto Assign Tags</button>
+      <button id="macroCalcLengthsBtn" type="button" class="button--ghost">Macro: Calculate Lengths (All Sounds)</button>
     </div>
 
     <div class="admin-grid">
@@ -613,6 +623,14 @@ async function renderAdminTools(force = false) {
         <label>
           File
           <input id="uploadSfxFile" name="file" type="file" accept=".mp3,.wav,.ogg,.flac" required />
+        </label>
+        <label class="inline-option">
+          <input id="uploadAutoTagOnUpload" name="autoTagOnUpload" type="checkbox" />
+          Auto-assign tags on this upload only
+        </label>
+        <label class="inline-option">
+          <input id="uploadCalcLengthOnUpload" name="calculateLengthOnUpload" type="checkbox" checked />
+          Calculate length on this upload only
         </label>
         <button type="submit">Upload Sound</button>
       </form>
@@ -722,6 +740,10 @@ async function renderAdminTools(force = false) {
     void runMacroAutoAssignTags();
   });
 
+  document.querySelector<HTMLButtonElement>('#macroCalcLengthsBtn')?.addEventListener('click', () => {
+    void runMacroCalculateLengths();
+  });
+
   updatePackEditorUiState();
   renderPackEditorSelectedList();
   renderPackEditorSearchResults();
@@ -741,7 +763,7 @@ function renderSfx(items: SfxItem[]) {
                   <h3>${escapeHtml(item.name)}</h3>
                   <span class="chip">${escapeHtml(item.id.slice(0, 8))}</span>
                 </div>
-                <p class="resource-card__meta">${formatDate(item.createdAt)} · ${item.downloads} downloads · ${item.likes} likes</p>
+                <p class="resource-card__meta">${formatDate(item.createdAt)} · ${formatLength(item.lengthSeconds)} · ${item.downloads} downloads · ${item.likes} likes</p>
                 <p class="resource-card__meta">${escapeHtml(item.url)}</p>
                 ${item.tags?.length ? `<p class="resource-card__meta">tags: ${escapeHtml(item.tags.join(', '))}</p>` : ''}
               </div>
@@ -917,6 +939,7 @@ async function loadDashboard() {
 async function deleteSfx(sfxId: string) {
   if (!canManage()) {
     setStatus('You need an admin account for deletes.');
+    showToast('You need an admin account for deletes.', 'error');
     return;
   }
 
@@ -925,6 +948,7 @@ async function deleteSfx(sfxId: string) {
   }
 
   if (!confirm('Delete this SFX permanently?')) {
+    showToast('Delete cancelled.', 'info');
     return;
   }
 
@@ -934,17 +958,21 @@ async function deleteSfx(sfxId: string) {
 
   if (!response.ok) {
     const payload = (await response.json().catch(() => null)) as { error?: string } | null;
-    setStatus(payload?.error ?? 'Failed to delete SFX.');
+    const message = payload?.error ?? 'Failed to delete SFX.';
+    setStatus(message);
+    showToast(message, 'error');
     return;
   }
 
   setStatus('SFX deleted.');
+  showToast('SFX deleted.', 'success');
   await loadDashboard();
 }
 
 async function deletePack(packId: string) {
   if (!canManage()) {
     setStatus('You need an admin account for deletes.');
+    showToast('You need an admin account for deletes.', 'error');
     return;
   }
 
@@ -953,6 +981,7 @@ async function deletePack(packId: string) {
   }
 
   if (!confirm('Delete this pack permanently?')) {
+    showToast('Delete cancelled.', 'info');
     return;
   }
 
@@ -962,11 +991,14 @@ async function deletePack(packId: string) {
 
   if (!response.ok) {
     const payload = (await response.json().catch(() => null)) as { error?: string } | null;
-    setStatus(payload?.error ?? 'Failed to delete pack.');
+    const message = payload?.error ?? 'Failed to delete pack.';
+    setStatus(message);
+    showToast(message, 'error');
     return;
   }
 
   setStatus('Pack deleted.');
+  showToast('Pack deleted.', 'success');
   await loadDashboard();
 }
 
@@ -1023,6 +1055,7 @@ async function logout() {
 async function submitUploadSfx() {
   if (!canManage()) {
     setStatus('Only admins can upload SFX.');
+    showToast('Only admins can upload SFX.', 'error');
     return;
   }
 
@@ -1032,31 +1065,56 @@ async function submitUploadSfx() {
 
   const nameInput = document.querySelector<HTMLInputElement>('#uploadSfxName');
   const fileInput = document.querySelector<HTMLInputElement>('#uploadSfxFile');
+  const autoTagInput = document.querySelector<HTMLInputElement>('#uploadAutoTagOnUpload');
+  const calcLengthInput = document.querySelector<HTMLInputElement>('#uploadCalcLengthOnUpload');
 
   const name = nameInput?.value.trim() ?? '';
   const file = fileInput?.files?.[0];
 
   if (!name || !file) {
     setStatus('SFX upload requires a name and file.');
+    showToast('SFX upload requires a name and file.', 'error');
     return;
   }
 
   const formData = new FormData();
   formData.append('name', name);
   formData.append('file', file);
+  formData.append('autoTagOnUpload', autoTagInput?.checked ? '1' : '0');
+  formData.append('calculateLengthOnUpload', calcLengthInput?.checked ? '1' : '0');
 
   const response = await fetch('/uploadSFX', {
     method: 'POST',
     body: formData,
   });
 
+  const payload = (await response.json().catch(() => null)) as {
+    error?: string;
+    macroWarnings?: string[];
+    macrosApplied?: {
+      autoTagOnUpload?: boolean;
+      calculateLengthOnUpload?: boolean;
+    };
+  } | null;
+
   if (!response.ok) {
-    const payload = (await response.json().catch(() => null)) as { error?: string } | null;
-    setStatus(payload?.error ?? 'Failed to upload SFX.');
+    const message = payload?.error ?? 'Failed to upload SFX.';
+    setStatus(message);
+    showToast(message, 'error');
     return;
   }
 
   setStatus('SFX uploaded successfully.');
+  showToast('SFX uploaded successfully.', 'success');
+  if (payload?.macrosApplied?.autoTagOnUpload || payload?.macrosApplied?.calculateLengthOnUpload) {
+    showToast(
+      `Upload macros applied: tags=${payload?.macrosApplied?.autoTagOnUpload ? 'yes' : 'no'}, length=${payload?.macrosApplied?.calculateLengthOnUpload ? 'yes' : 'no'}`,
+      'info',
+    );
+  }
+  if (Array.isArray(payload?.macroWarnings) && payload?.macroWarnings.length > 0) {
+    showToast(`Upload macro warnings: ${payload.macroWarnings.join('; ')}`, 'error');
+  }
   if (nameInput) nameInput.value = '';
   if (fileInput) fileInput.value = '';
   sfxPage = 1;
@@ -1066,6 +1124,7 @@ async function submitUploadSfx() {
 async function submitSavePack() {
   if (!canManage()) {
     setStatus('Only admins can manage packs.');
+    showToast('Only admins can manage packs.', 'error');
     return;
   }
 
@@ -1085,6 +1144,7 @@ async function submitSavePack() {
 
   if (!name || ids.length === 0) {
     setStatus('Pack requires a name and at least one selected sound.');
+    showToast('Pack requires a name and at least one selected sound.', 'error');
     return;
   }
 
@@ -1104,11 +1164,14 @@ async function submitSavePack() {
 
   if (!response.ok) {
     const payload = (await response.json().catch(() => null)) as { error?: string } | null;
-    setStatus(payload?.error ?? `Failed to ${isEditing ? 'save' : 'create'} pack.`);
+    const message = payload?.error ?? `Failed to ${isEditing ? 'save' : 'create'} pack.`;
+    setStatus(message);
+    showToast(message, 'error');
     return;
   }
 
   setStatus(`Pack ${isEditing ? 'updated' : 'created'} successfully.`);
+  showToast(`Pack ${isEditing ? 'updated' : 'created'} successfully.`, 'success');
   if (nameInput) nameInput.value = '';
   if (selector) selector.value = '';
   if (downloadsInput) downloadsInput.value = '0';
@@ -1124,11 +1187,13 @@ async function submitSavePack() {
 async function submitSaveSfx() {
   if (!canManage()) {
     setStatus('Only admins can edit SFX.');
+    showToast('Only admins can edit SFX.', 'error');
     return;
   }
 
   if (!sfxEditorEditingId) {
     setStatus('Choose a sound from the list first.');
+    showToast('Choose a sound from the list first.', 'error');
     return;
   }
 
@@ -1144,6 +1209,7 @@ async function submitSaveSfx() {
 
   if (!name) {
     setStatus('SFX name is required.');
+    showToast('SFX name is required.', 'error');
     return;
   }
 
@@ -1157,11 +1223,14 @@ async function submitSaveSfx() {
 
   if (!response.ok) {
     const payload = (await response.json().catch(() => null)) as { error?: string } | null;
-    setStatus(payload?.error ?? 'Failed to update SFX.');
+    const message = payload?.error ?? 'Failed to update SFX.';
+    setStatus(message);
+    showToast(message, 'error');
     return;
   }
 
   setStatus('SFX updated successfully.');
+  showToast('SFX updated successfully.', 'success');
   await loadDashboard();
 }
 
@@ -1220,6 +1289,35 @@ async function runMacroAutoAssignTags() {
 
   showToast(
     `${payload?.message ?? 'Auto-tag complete.'} Updated ${payload?.updatedCount ?? 0}, long=${payload?.longCount ?? 0}, loud=${payload?.loudCount ?? 0}, failed=${payload?.failedCount ?? 0}.`,
+    'success',
+  );
+  await loadDashboard();
+}
+
+async function runMacroCalculateLengths() {
+  if (!canManage()) {
+    showToast('Only admins can run macros.', 'error');
+    return;
+  }
+
+  const response = await fetch('/sfx/admin/macros/calculate-lengths', {
+    method: 'POST',
+  });
+
+  const payload = (await response.json().catch(() => null)) as {
+    message?: string;
+    updatedCount?: number;
+    failedCount?: number;
+    error?: string;
+  } | null;
+
+  if (!response.ok) {
+    showToast(payload?.error ?? 'Length macro failed.', 'error');
+    return;
+  }
+
+  showToast(
+    `${payload?.message ?? 'Length macro complete.'} Updated ${payload?.updatedCount ?? 0}, failed=${payload?.failedCount ?? 0}.`,
     'success',
   );
   await loadDashboard();

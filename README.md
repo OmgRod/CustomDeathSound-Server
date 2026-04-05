@@ -99,7 +99,11 @@ POST /uploadSFX
 Body: multipart/form-data with 'file' and 'name' fields
 ```
 
-New uploads start with an empty `tags` array.
+Optional upload flags (applied only to the uploaded sound):
+- `autoTagOnUpload`: `1|0`
+- `calculateLengthOnUpload`: `1|0`
+
+Every SFX stores `lengthSeconds` as a numeric field.
 
 ### Upload Pack (Admin Only)
 ```bash
@@ -182,6 +186,13 @@ Applies tags automatically:
 The macro replaces the entire tags array with the computed result for each sound.
 Any tags that no longer apply are removed as part of the same pass.
 If a moderator has manually changed tags for a sound, that sound is skipped by the macro and not overridden.
+
+### Macro: Calculate Lengths For All Sounds (Admin Only)
+```bash
+POST /sfx/admin/macros/calculate-lengths
+```
+
+Recalculates and stores `lengthSeconds` for all sounds that can be analyzed.
 
 ### Get Pack (Public)
 ```bash

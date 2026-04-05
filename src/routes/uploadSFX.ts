@@ -8,6 +8,7 @@ import rateLimiter from '../utils/rateLimiter';
 import dotenv from "dotenv";
 import leoProfanity from 'leo-profanity';
 import { requireAuth, requireRole, AuthRequest } from '../middleware/auth';
+import { analyzeAudioFile, computeAutoTags, normalizeLengthSeconds } from '../utils/audioAnalysis';
 
 dotenv.config();
 
@@ -55,7 +56,11 @@ router.post(
     await sfxDB.read();
     console.log('DB Data before:', sfxDB.data);
 
-    const { name } = req.body;
+    const { name, autoTagOnUpload, calculateLengthOnUpload } = req.body as {
+      name?: string;
+      autoTagOnUpload?: string;
+      calculateLengthOnUpload?: string;
+    };
     const file = req.file;
     const sfxId = (req as any).sfxId;
 
@@ -77,11 +82,36 @@ router.post(
     if (!sfxDB.data) sfxDB.data = { sfx: [] };
     if (!sfxDB.data.sfx) sfxDB.data.sfx = [];
 
+    const shouldAutoTag = ['1', 'true', 'on', 'yes'].includes(String(autoTagOnUpload ?? '').toLowerCase());
+    const shouldCalculateLength = ['1', 'true', 'on', 'yes'].includes(String(calculateLengthOnUpload ?? '').toLowerCase());
+
+    const soundsDir = path.join(__dirname, '../../public/sounds');
+    const filePath = path.join(soundsDir, file.filename);
+    const macroWarnings: string[] = [];
+
+    let tags: string[] = [];
+    let lengthSeconds = 0;
+
+    if (shouldAutoTag || shouldCalculateLength) {
+      try {
+        const analysis = await analyzeAudioFile(filePath);
+        if (shouldAutoTag) {
+          tags = computeAutoTags(analysis, 0);
+        }
+        if (shouldCalculateLength) {
+          lengthSeconds = normalizeLengthSeconds(analysis.durationSeconds);
+        }
+      } catch (error) {
+        macroWarnings.push(error instanceof Error ? error.message : 'Unable to analyze uploaded file for macros.');
+      }
+    }
+
     const newSfx = {
       id: sfxId,
       name,
       url: `/sounds/${file.filename}`,
-      tags: [],
+      tags,
+      lengthSeconds,
       downloads: 0,
       likes: 0,
       dislikes: 0,
@@ -93,7 +123,15 @@ router.post(
     await sfxDB.write();
     console.log('SFX DB written to disk.');
 
-    res.status(201).json({ message: 'SFX uploaded successfully', sfx: newSfx });
+    res.status(201).json({
+      message: 'SFX uploaded successfully',
+      sfx: newSfx,
+      macrosApplied: {
+        autoTagOnUpload: shouldAutoTag,
+        calculateLengthOnUpload: shouldCalculateLength,
+      },
+      macroWarnings,
+    });
   })
 );
 
