@@ -201,6 +201,7 @@ POST /sfx/admin/macros/trim-silence
 ```
 
 Trims leading and trailing silence from each sound file and then refreshes `lengthSeconds`.
+The trim uses a more permissive near-silence threshold (about `-35dB`) and removes silent edges based on volume only.
 
 ### Get Pack (Public)
 ```bash

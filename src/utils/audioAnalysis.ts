@@ -66,7 +66,10 @@ export function normalizeLengthSeconds(seconds: number): number {
   return Math.round(seconds * 1000) / 1000;
 }
 
-export async function trimLeadingTrailingSilenceInPlace(filePath: string, thresholdDb = '-50dB'): Promise<void> {
+export async function trimLeadingTrailingSilenceInPlace(
+  filePath: string,
+  thresholdDb = '-35dB',
+): Promise<void> {
   const directory = path.dirname(filePath);
   const extension = path.extname(filePath) || '.tmp';
   const basename = path.basename(filePath, extension);
