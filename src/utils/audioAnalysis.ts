@@ -1,6 +1,8 @@
 import ffmpegInstaller from '@ffmpeg-installer/ffmpeg';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
+import fs from 'fs/promises';
+import path from 'path';
 
 const execFileAsync = promisify(execFile);
 
@@ -62,4 +64,39 @@ export function normalizeLengthSeconds(seconds: number): number {
   }
 
   return Math.round(seconds * 1000) / 1000;
+}
+
+export async function trimLeadingTrailingSilenceInPlace(filePath: string, thresholdDb = '-50dB'): Promise<void> {
+  const directory = path.dirname(filePath);
+  const extension = path.extname(filePath) || '.tmp';
+  const basename = path.basename(filePath, extension);
+  const tempPath = path.join(directory, `${basename}.trimmed-${Date.now()}${extension}`);
+
+  const filter = [
+    `silenceremove=start_periods=1:start_silence=0:start_threshold=${thresholdDb}`,
+    'areverse',
+    `silenceremove=start_periods=1:start_silence=0:start_threshold=${thresholdDb}`,
+    'areverse',
+  ].join(',');
+
+  try {
+    await execFileAsync(ffmpegInstaller.path, [
+      '-hide_banner',
+      '-y',
+      '-i',
+      filePath,
+      '-af',
+      filter,
+      tempPath,
+    ], { maxBuffer: 10 * 1024 * 1024 });
+
+    await fs.rename(tempPath, filePath);
+  } catch (error) {
+    try {
+      await fs.unlink(tempPath);
+    } catch {
+      // Ignore cleanup errors for temporary files.
+    }
+    throw error;
+  }
 }

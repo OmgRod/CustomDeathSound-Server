@@ -8,7 +8,7 @@ import rateLimiter from '../utils/rateLimiter';
 import dotenv from "dotenv";
 import leoProfanity from 'leo-profanity';
 import { requireAuth, requireRole, AuthRequest } from '../middleware/auth';
-import { analyzeAudioFile, computeAutoTags, normalizeLengthSeconds } from '../utils/audioAnalysis';
+import { analyzeAudioFile, computeAutoTags, normalizeLengthSeconds, trimLeadingTrailingSilenceInPlace } from '../utils/audioAnalysis';
 
 dotenv.config();
 
@@ -56,10 +56,11 @@ router.post(
     await sfxDB.read();
     console.log('DB Data before:', sfxDB.data);
 
-    const { name, autoTagOnUpload, calculateLengthOnUpload } = req.body as {
+    const { name, autoTagOnUpload, calculateLengthOnUpload, trimSilenceOnUpload } = req.body as {
       name?: string;
       autoTagOnUpload?: string;
       calculateLengthOnUpload?: string;
+      trimSilenceOnUpload?: string;
     };
     const file = req.file;
     const sfxId = (req as any).sfxId;
@@ -84,6 +85,7 @@ router.post(
 
     const shouldAutoTag = ['1', 'true', 'on', 'yes'].includes(String(autoTagOnUpload ?? '').toLowerCase());
     const shouldCalculateLength = ['1', 'true', 'on', 'yes'].includes(String(calculateLengthOnUpload ?? '').toLowerCase());
+    const shouldTrimSilence = ['1', 'true', 'on', 'yes'].includes(String(trimSilenceOnUpload ?? '').toLowerCase());
 
     const soundsDir = path.join(__dirname, '../../public/sounds');
     const filePath = path.join(soundsDir, file.filename);
@@ -91,6 +93,14 @@ router.post(
 
     let tags: string[] = [];
     let lengthSeconds = 0;
+
+    if (shouldTrimSilence) {
+      try {
+        await trimLeadingTrailingSilenceInPlace(filePath);
+      } catch (error) {
+        macroWarnings.push(error instanceof Error ? error.message : 'Unable to trim silence for uploaded file.');
+      }
+    }
 
     if (shouldAutoTag || shouldCalculateLength) {
       try {
@@ -129,6 +139,7 @@ router.post(
       macrosApplied: {
         autoTagOnUpload: shouldAutoTag,
         calculateLengthOnUpload: shouldCalculateLength,
+        trimSilenceOnUpload: shouldTrimSilence,
       },
       macroWarnings,
     });

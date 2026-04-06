@@ -102,6 +102,7 @@ Body: multipart/form-data with 'file' and 'name' fields
 Optional upload flags (applied only to the uploaded sound):
 - `autoTagOnUpload`: `1|0`
 - `calculateLengthOnUpload`: `1|0`
+- `trimSilenceOnUpload`: `1|0`
 
 Every SFX stores `lengthSeconds` as a numeric field.
 
@@ -193,6 +194,13 @@ POST /sfx/admin/macros/calculate-lengths
 ```
 
 Recalculates and stores `lengthSeconds` for all sounds that can be analyzed.
+
+### Macro: Trim Leading/Trailing Silence For All Sounds (Admin Only)
+```bash
+POST /sfx/admin/macros/trim-silence
+```
+
+Trims leading and trailing silence from each sound file and then refreshes `lengthSeconds`.
 
 ### Get Pack (Public)
 ```bash

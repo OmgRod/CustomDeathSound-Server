@@ -611,6 +611,7 @@ async function renderAdminTools(force = false) {
       <button id="macroDeleteMissingBtn" type="button" class="button--ghost">Macro: Delete Missing-File SFX</button>
       <button id="macroAutoTagBtn" type="button" class="button--ghost">Macro: Auto Assign Tags</button>
       <button id="macroCalcLengthsBtn" type="button" class="button--ghost">Macro: Calculate Lengths (All Sounds)</button>
+      <button id="macroTrimSilenceBtn" type="button" class="button--ghost">Macro: Trim Leading/Trailing Silence</button>
     </div>
 
     <div class="admin-grid">
@@ -631,6 +632,10 @@ async function renderAdminTools(force = false) {
         <label class="inline-option">
           <input id="uploadCalcLengthOnUpload" name="calculateLengthOnUpload" type="checkbox" checked />
           Calculate length on this upload only
+        </label>
+        <label class="inline-option">
+          <input id="uploadTrimSilenceOnUpload" name="trimSilenceOnUpload" type="checkbox" />
+          Trim leading/trailing silence on this upload only
         </label>
         <button type="submit">Upload Sound</button>
       </form>
@@ -742,6 +747,10 @@ async function renderAdminTools(force = false) {
 
   document.querySelector<HTMLButtonElement>('#macroCalcLengthsBtn')?.addEventListener('click', () => {
     void runMacroCalculateLengths();
+  });
+
+  document.querySelector<HTMLButtonElement>('#macroTrimSilenceBtn')?.addEventListener('click', () => {
+    void runMacroTrimSilence();
   });
 
   updatePackEditorUiState();
@@ -1067,6 +1076,7 @@ async function submitUploadSfx() {
   const fileInput = document.querySelector<HTMLInputElement>('#uploadSfxFile');
   const autoTagInput = document.querySelector<HTMLInputElement>('#uploadAutoTagOnUpload');
   const calcLengthInput = document.querySelector<HTMLInputElement>('#uploadCalcLengthOnUpload');
+  const trimSilenceInput = document.querySelector<HTMLInputElement>('#uploadTrimSilenceOnUpload');
 
   const name = nameInput?.value.trim() ?? '';
   const file = fileInput?.files?.[0];
@@ -1082,6 +1092,7 @@ async function submitUploadSfx() {
   formData.append('file', file);
   formData.append('autoTagOnUpload', autoTagInput?.checked ? '1' : '0');
   formData.append('calculateLengthOnUpload', calcLengthInput?.checked ? '1' : '0');
+  formData.append('trimSilenceOnUpload', trimSilenceInput?.checked ? '1' : '0');
 
   const response = await fetch('/uploadSFX', {
     method: 'POST',
@@ -1094,6 +1105,7 @@ async function submitUploadSfx() {
     macrosApplied?: {
       autoTagOnUpload?: boolean;
       calculateLengthOnUpload?: boolean;
+      trimSilenceOnUpload?: boolean;
     };
   } | null;
 
@@ -1106,9 +1118,9 @@ async function submitUploadSfx() {
 
   setStatus('SFX uploaded successfully.');
   showToast('SFX uploaded successfully.', 'success');
-  if (payload?.macrosApplied?.autoTagOnUpload || payload?.macrosApplied?.calculateLengthOnUpload) {
+  if (payload?.macrosApplied?.autoTagOnUpload || payload?.macrosApplied?.calculateLengthOnUpload || payload?.macrosApplied?.trimSilenceOnUpload) {
     showToast(
-      `Upload macros applied: tags=${payload?.macrosApplied?.autoTagOnUpload ? 'yes' : 'no'}, length=${payload?.macrosApplied?.calculateLengthOnUpload ? 'yes' : 'no'}`,
+      `Upload macros applied: tags=${payload?.macrosApplied?.autoTagOnUpload ? 'yes' : 'no'}, length=${payload?.macrosApplied?.calculateLengthOnUpload ? 'yes' : 'no'}, trim=${payload?.macrosApplied?.trimSilenceOnUpload ? 'yes' : 'no'}`,
       'info',
     );
   }
@@ -1318,6 +1330,36 @@ async function runMacroCalculateLengths() {
 
   showToast(
     `${payload?.message ?? 'Length macro complete.'} Updated ${payload?.updatedCount ?? 0}, failed=${payload?.failedCount ?? 0}.`,
+    'success',
+  );
+  await loadDashboard();
+}
+
+async function runMacroTrimSilence() {
+  if (!canManage()) {
+    showToast('Only admins can run macros.', 'error');
+    return;
+  }
+
+  const response = await fetch('/sfx/admin/macros/trim-silence', {
+    method: 'POST',
+  });
+
+  const payload = (await response.json().catch(() => null)) as {
+    message?: string;
+    processedCount?: number;
+    lengthUpdatedCount?: number;
+    failedCount?: number;
+    error?: string;
+  } | null;
+
+  if (!response.ok) {
+    showToast(payload?.error ?? 'Trim-silence macro failed.', 'error');
+    return;
+  }
+
+  showToast(
+    `${payload?.message ?? 'Trim macro complete.'} Processed ${payload?.processedCount ?? 0}, length-updated=${payload?.lengthUpdatedCount ?? 0}, failed=${payload?.failedCount ?? 0}.`,
     'success',
   );
   await loadDashboard();

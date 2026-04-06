@@ -6,7 +6,7 @@ import { asyncHandler } from '../utils/asyncHandler';
 import { requireAuth, requireRole, AuthRequest } from '../middleware/auth';
 import rateLimiter from '../utils/rateLimiter';
 import { v4 as uuidv4 } from 'uuid';
-import { analyzeAudioFile, computeAutoTags, normalizeLengthSeconds } from '../utils/audioAnalysis';
+import { analyzeAudioFile, computeAutoTags, normalizeLengthSeconds, trimLeadingTrailingSilenceInPlace } from '../utils/audioAnalysis';
 
 const router = express.Router();
 
@@ -205,6 +205,60 @@ router.post(
         return res.status(200).json({
             message: 'Length macro completed.',
             updatedCount,
+            failedCount: failed.length,
+            failed,
+        });
+    })
+);
+
+router.post(
+    '/admin/macros/trim-silence',
+    rateLimiter(10, 100),
+    requireAuth,
+    requireRole(['admin']),
+    asyncHandler(async (_req: AuthRequest, res: Response) => {
+        await sfxDB.read();
+        const sfxList = sfxDB.data?.sfx || [];
+        const soundsDir = path.join(__dirname, '../../public/sounds');
+
+        let processedCount = 0;
+        let lengthUpdatedCount = 0;
+        const failed: Array<{ id: string; reason: string }> = [];
+
+        for (const item of sfxList) {
+            const filePath = path.join(soundsDir, path.basename(item.url));
+
+            try {
+                await fs.access(filePath);
+            } catch (error) {
+                if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+                    failed.push({ id: item.id, reason: 'file-missing' });
+                    continue;
+                }
+                throw error;
+            }
+
+            try {
+                await trimLeadingTrailingSilenceInPlace(filePath);
+                processedCount += 1;
+
+                const analysis = await analyzeAudioFile(filePath);
+                const nextLength = normalizeLengthSeconds(analysis.durationSeconds);
+                if (item.lengthSeconds !== nextLength) {
+                    item.lengthSeconds = nextLength;
+                    lengthUpdatedCount += 1;
+                }
+            } catch (error) {
+                failed.push({ id: item.id, reason: error instanceof Error ? error.message : 'trim-failed' });
+            }
+        }
+
+        await sfxDB.write();
+
+        return res.status(200).json({
+            message: 'Trim-silence macro completed.',
+            processedCount,
+            lengthUpdatedCount,
             failedCount: failed.length,
             failed,
         });
