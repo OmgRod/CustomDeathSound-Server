@@ -4,8 +4,9 @@ import crypto from 'crypto';
 import { asyncHandler } from '../utils/asyncHandler';
 import { createSignedSessionToken, parseCookieHeader, serializeCookie, verifySignedSessionToken } from '../utils/session';
 import { upsertGithubUser } from '../utils/userAccounts';
-import { AuthRequest } from '../middleware/auth';
+import { AuthRequest, requireAuth, requireRole } from '../middleware/auth';
 import { usersDB } from '../db';
+import { clearRateLimitForRequest, resolveClientIp } from '../utils/rateLimiter';
 
 const router = Router();
 const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 30;
@@ -218,6 +219,17 @@ router.post('/logout', asyncHandler(async (_req: Request, res: Response) => {
     serializeCookie('cds_session', '', { httpOnly: true, maxAge: 0, path: '/', sameSite: 'Lax' }),
   ]);
   res.status(200).json({ message: 'Logged out' });
+}));
+
+router.get('/admin/network', requireAuth, requireRole(['admin']), asyncHandler(async (req: AuthRequest, res: Response) => {
+  const ip = resolveClientIp(req);
+  return res.status(200).json({ ip });
+}));
+
+router.post('/admin/network/reset-rate-limit', requireAuth, requireRole(['admin']), asyncHandler(async (req: AuthRequest, res: Response) => {
+  const ip = resolveClientIp(req);
+  clearRateLimitForRequest(req);
+  return res.status(200).json({ message: 'Rate limit reset for this IP.', ip });
 }));
 
 export default router;

@@ -145,6 +145,7 @@ let packSearchQuery = '';
 let sfxSearchTimer: number | null = null;
 let packSearchTimer: number | null = null;
 let sfxEditorEditingId: string | null = null;
+let adminDetectedIp: string | null = null;
 
 const toastStack = document.createElement('div');
 toastStack.id = 'toastStack';
@@ -614,6 +615,12 @@ async function renderAdminTools(force = false) {
       <button id="macroTrimSilenceBtn" type="button" class="button--ghost">Macro: Trim Leading/Trailing Silence</button>
     </div>
 
+    <div class="admin-macro-row">
+      <span id="adminIpLabel" class="pill">IP: ${escapeHtml(adminDetectedIp ?? 'Not checked yet')}</span>
+      <button id="adminCheckIpBtn" type="button" class="button--ghost">Check My IP</button>
+      <button id="adminResetRateLimitsBtn" type="button" class="button--ghost">Reset My Rate Limits</button>
+    </div>
+
     <div class="admin-grid">
       <form id="uploadSfxForm" class="admin-form">
         <h3>Upload SFX</h3>
@@ -751,6 +758,14 @@ async function renderAdminTools(force = false) {
 
   document.querySelector<HTMLButtonElement>('#macroTrimSilenceBtn')?.addEventListener('click', () => {
     void runMacroTrimSilence();
+  });
+
+  document.querySelector<HTMLButtonElement>('#adminCheckIpBtn')?.addEventListener('click', () => {
+    void loadAdminIp();
+  });
+
+  document.querySelector<HTMLButtonElement>('#adminResetRateLimitsBtn')?.addEventListener('click', () => {
+    void resetMyRateLimits();
   });
 
   updatePackEditorUiState();
@@ -1363,6 +1378,64 @@ async function runMacroTrimSilence() {
     'success',
   );
   await loadDashboard();
+}
+
+function updateAdminIpLabel(ip: string | null) {
+  const label = document.querySelector<HTMLElement>('#adminIpLabel');
+  if (!label) return;
+  label.textContent = `IP: ${ip ?? 'Not checked yet'}`;
+}
+
+async function loadAdminIp() {
+  if (!canManage()) {
+    showToast('Only admins can check IP.', 'error');
+    return;
+  }
+
+  if (!isActionAllowed('admin-check-ip', 1000)) {
+    return;
+  }
+
+  const response = await fetch('/auth/admin/network');
+  const payload = (await response.json().catch(() => null)) as { ip?: string; error?: string } | null;
+
+  if (!response.ok) {
+    showToast(payload?.error ?? 'Failed to check IP.', 'error');
+    return;
+  }
+
+  adminDetectedIp = payload?.ip?.trim() || 'Unknown';
+  updateAdminIpLabel(adminDetectedIp);
+  setStatus(`Detected IP: ${adminDetectedIp}`);
+  showToast(`Detected IP: ${adminDetectedIp}`, 'info');
+}
+
+async function resetMyRateLimits() {
+  if (!canManage()) {
+    showToast('Only admins can reset rate limits.', 'error');
+    return;
+  }
+
+  if (!isActionAllowed('admin-reset-ratelimit', 1500)) {
+    return;
+  }
+
+  const response = await fetch('/auth/admin/network/reset-rate-limit', {
+    method: 'POST',
+  });
+
+  const payload = (await response.json().catch(() => null)) as { message?: string; ip?: string; error?: string } | null;
+
+  if (!response.ok) {
+    showToast(payload?.error ?? 'Failed to reset rate limits.', 'error');
+    return;
+  }
+
+  adminDetectedIp = payload?.ip?.trim() || adminDetectedIp || 'Unknown';
+  updateAdminIpLabel(adminDetectedIp);
+  const message = payload?.message ?? 'Rate limits reset.';
+  setStatus(`${message} (${adminDetectedIp})`);
+  showToast(`${message} (${adminDetectedIp})`, 'success');
 }
 
 renderPagination();
