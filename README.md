@@ -151,6 +151,14 @@ Body: {"name": "new name", "downloads": 0, "tags": ["long", "loud"]}
 
 `PUT /sfx/:sfxID` is available to admins and moderators. Manual tag changes are written to `db/tagAudit.json`.
 
+### Replace SFX File (Admin Only)
+```bash
+POST /sfx/:sfxID/replace-file
+Body: multipart/form-data with 'file'
+```
+
+`POST /sfx/:sfxID/replace-file` is available to admins and moderators. It replaces the backing audio file, updates `url`, and refreshes `lengthSeconds` when analysis succeeds.
+
 ### View SFX Tag Audit (Admin/Moderator)
 ```bash
 GET /sfx/:sfxID/tag-audit

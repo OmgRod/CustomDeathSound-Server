@@ -391,6 +391,7 @@ function updatePackEditorUiState() {
 function updateSfxEditorUiState() {
   const title = document.querySelector<HTMLElement>('#sfxEditorTitle');
   const submitButton = document.querySelector<HTMLButtonElement>('#saveSfxBtn');
+  const replaceButton = document.querySelector<HTMLButtonElement>('#replaceSfxFileBtn');
   const cancelButton = document.querySelector<HTMLButtonElement>('#cancelSfxEditBtn');
 
   if (title) {
@@ -400,6 +401,10 @@ function updateSfxEditorUiState() {
   if (submitButton) {
     submitButton.disabled = !sfxEditorEditingId;
     submitButton.textContent = sfxEditorEditingId ? 'Save SFX Changes' : 'Save SFX Changes';
+  }
+
+  if (replaceButton) {
+    replaceButton.disabled = !sfxEditorEditingId;
   }
 
   if (cancelButton) {
@@ -416,11 +421,13 @@ function beginEditingSfx(item: SfxItem) {
   const nameInput = document.querySelector<HTMLInputElement>('#editSfxName');
   const downloadsInput = document.querySelector<HTMLInputElement>('#editSfxDownloads');
   const tagsInput = document.querySelector<HTMLTextAreaElement>('#editSfxTags');
+  const fileInput = document.querySelector<HTMLInputElement>('#editSfxFile');
   const idPill = document.querySelector<HTMLElement>('#editSfxIdPill');
 
   if (nameInput) nameInput.value = item.name;
   if (downloadsInput) downloadsInput.value = String(Math.max(0, item.downloads ?? 0));
   if (tagsInput) tagsInput.value = (item.tags ?? []).join(', ');
+  if (fileInput) fileInput.value = '';
   if (idPill) idPill.textContent = item.id;
 
   updateSfxEditorUiState();
@@ -431,11 +438,13 @@ function resetSfxEditor() {
   const nameInput = document.querySelector<HTMLInputElement>('#editSfxName');
   const downloadsInput = document.querySelector<HTMLInputElement>('#editSfxDownloads');
   const tagsInput = document.querySelector<HTMLTextAreaElement>('#editSfxTags');
+  const fileInput = document.querySelector<HTMLInputElement>('#editSfxFile');
   const idPill = document.querySelector<HTMLElement>('#editSfxIdPill');
 
   if (nameInput) nameInput.value = '';
   if (downloadsInput) downloadsInput.value = '0';
   if (tagsInput) tagsInput.value = '';
+  if (fileInput) fileInput.value = '';
   if (idPill) idPill.textContent = 'No SFX selected';
 
   updateSfxEditorUiState();
@@ -662,8 +671,13 @@ async function renderAdminTools(force = false) {
           Tags (comma or newline separated)
           <textarea id="editSfxTags" name="tags" rows="4" placeholder="long, loud"></textarea>
         </label>
+        <label>
+          Replace audio file (optional)
+          <input id="editSfxFile" name="file" type="file" accept=".mp3,.wav,.ogg,.flac" />
+        </label>
         <div class="auth-actions">
           <button id="saveSfxBtn" type="submit" disabled>Save SFX Changes</button>
+          <button id="replaceSfxFileBtn" type="button" class="button--ghost" disabled>Replace SFX File</button>
           <button id="cancelSfxEditBtn" type="button" class="button--ghost" hidden>Cancel Edit</button>
         </div>
       </form>
@@ -742,6 +756,10 @@ async function renderAdminTools(force = false) {
 
   document.querySelector<HTMLButtonElement>('#cancelSfxEditBtn')?.addEventListener('click', () => {
     resetSfxEditor();
+  });
+
+  document.querySelector<HTMLButtonElement>('#replaceSfxFileBtn')?.addEventListener('click', () => {
+    void submitReplaceSfxFile();
   });
 
   document.querySelector<HTMLButtonElement>('#macroDeleteMissingBtn')?.addEventListener('click', () => {
@@ -1258,6 +1276,58 @@ async function submitSaveSfx() {
 
   setStatus('SFX updated successfully.');
   showToast('SFX updated successfully.', 'success');
+  await loadDashboard();
+}
+
+async function submitReplaceSfxFile() {
+  if (!canManage()) {
+    setStatus('Only admins can replace SFX files.');
+    showToast('Only admins can replace SFX files.', 'error');
+    return;
+  }
+
+  if (!sfxEditorEditingId) {
+    setStatus('Choose a sound from the list first.');
+    showToast('Choose a sound from the list first.', 'error');
+    return;
+  }
+
+  if (!isActionAllowed(`replace-sfx-file:${sfxEditorEditingId}`, 4000)) {
+    return;
+  }
+
+  const fileInput = document.querySelector<HTMLInputElement>('#editSfxFile');
+  const file = fileInput?.files?.[0];
+
+  if (!file) {
+    setStatus('Choose a replacement audio file first.');
+    showToast('Choose a replacement audio file first.', 'error');
+    return;
+  }
+
+  const formData = new FormData();
+  formData.append('file', file);
+
+  const response = await fetch(`/sfx/${encodeURIComponent(sfxEditorEditingId)}/replace-file`, {
+    method: 'POST',
+    body: formData,
+  });
+
+  const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+
+  if (!response.ok) {
+    const message = payload?.error ?? 'Failed to replace SFX file.';
+    setStatus(message);
+    showToast(message, 'error');
+    return;
+  }
+
+  if (fileInput) {
+    fileInput.value = '';
+  }
+
+  setStatus('SFX file replaced successfully.');
+  showToast('SFX file replaced successfully.', 'success');
   await loadDashboard();
 }
 

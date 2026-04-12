@@ -1,6 +1,7 @@
 import express, { Request, Response } from 'express';
 import fs from 'fs/promises';
 import path from 'path';
+import multer, { FileFilterCallback } from 'multer';
 import { sfxDB, tagAuditDB } from '../db';
 import { asyncHandler } from '../utils/asyncHandler';
 import { requireAuth, requireRole, AuthRequest } from '../middleware/auth';
@@ -9,6 +10,31 @@ import { v4 as uuidv4 } from 'uuid';
 import { analyzeAudioFile, computeAutoTags, normalizeLengthSeconds, trimLeadingTrailingSilenceInPlace } from '../utils/audioAnalysis';
 
 const router = express.Router();
+
+const allowedExtensions = ['.mp3', '.wav', '.ogg', '.flac'];
+
+const fileFilter = (req: Request, file: Express.Multer.File, cb: FileFilterCallback) => {
+    const ext = path.extname(file.originalname).toLowerCase();
+    if (allowedExtensions.includes(ext)) {
+        cb(null, true);
+        return;
+    }
+
+    cb(new Error('Invalid file type. Only mp3, wav, ogg, and flac are allowed.'));
+};
+
+const storage = multer.diskStorage({
+    destination: (req, file, cb) => {
+        cb(null, path.join(__dirname, '../../public/sounds'));
+    },
+    filename: (req, file, cb) => {
+        const { sfxID } = req.params;
+        const sanitizedName = file.originalname.replace(/[^a-zA-Z0-9.\-_]/g, '_');
+        cb(null, `${sfxID}-${Date.now()}-${sanitizedName}`);
+    },
+});
+
+const uploadReplacement = multer({ storage, fileFilter });
 
 function parseSearchParams(req: Request) {
     const query = String(req.query.query ?? '').trim().toLowerCase();
@@ -483,6 +509,72 @@ router.put(
 
         return res.status(200).json({
             message: 'SFX updated successfully',
+            sfx: sfxList[index],
+        });
+    })
+);
+
+router.post(
+    '/:sfxID/replace-file',
+    rateLimiter(15, 100),
+    requireAuth,
+    requireRole(['admin', 'moderator']),
+    uploadReplacement.single('file'),
+    asyncHandler(async (req: AuthRequest, res: Response) => {
+        const { sfxID } = req.params;
+        const file = req.file;
+
+        if (!file) {
+            return res.status(400).json({ error: 'Missing required file upload.' });
+        }
+
+        const filesizeLimit = Number(process.env.FILESIZE_LIMIT);
+        if (Number.isFinite(filesizeLimit) && file.size > filesizeLimit) {
+            await fs.unlink(file.path).catch(() => undefined);
+            return res.status(413).json({ error: `File exceeds size limit of ${filesizeLimit} bytes` });
+        }
+
+        await sfxDB.read();
+        const sfxList = sfxDB.data?.sfx || [];
+        const index = sfxList.findIndex((item) => String(item.id) === sfxID);
+
+        if (index === -1) {
+            await fs.unlink(file.path).catch(() => undefined);
+            return res.status(404).json({ error: 'SFX not found' });
+        }
+
+        const current = sfxList[index];
+        const previousFilename = path.basename(current.url);
+        const replacementFilename = file.filename;
+        const replacementPath = path.join(path.join(__dirname, '../../public/sounds'), replacementFilename);
+
+        let nextLengthSeconds = current.lengthSeconds;
+        try {
+            const analysis = await analyzeAudioFile(replacementPath);
+            nextLengthSeconds = normalizeLengthSeconds(analysis.durationSeconds);
+        } catch {
+            nextLengthSeconds = current.lengthSeconds;
+        }
+
+        sfxList[index] = {
+            ...current,
+            url: `/sounds/${replacementFilename}`,
+            lengthSeconds: nextLengthSeconds,
+        };
+
+        await sfxDB.write();
+
+        if (previousFilename !== replacementFilename) {
+            const previousPath = path.join(path.join(__dirname, '../../public/sounds'), previousFilename);
+            await fs.unlink(previousPath).catch((error) => {
+                if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+                    throw error;
+                }
+            });
+        }
+
+        return res.status(200).json({
+            message: 'SFX file replaced successfully',
             sfx: sfxList[index],
         });
     })
