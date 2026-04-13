@@ -35,6 +35,7 @@ export interface PackDBSchema {
 export interface User {
   githubId: string;
   role: 'admin' | 'moderator' | 'user';
+  modVerificationCode?: string;
 }
 
 export interface UserDBSchema {
