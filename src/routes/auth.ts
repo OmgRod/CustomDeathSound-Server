@@ -1,4 +1,3 @@
-import { oneTimeTokenDB, OneTimeToken } from '../db/onetimetoken';
 import { Router, Request, Response } from 'express';
 import https from 'https';
 import crypto from 'crypto';
@@ -141,22 +140,7 @@ router.post('/mod/generate-token', requireAuth, asyncHandler(async (req: AuthReq
   res.json({ token: (dbUser as any).modVerificationCode });
 }));
 
-router.post('/mod/verify-token', asyncHandler(async (req: Request, res: Response) => {
-  const { token } = req.body as { token?: string };
-  if (!token) return res.status(400).json({ error: 'Missing token' });
-  await oneTimeTokenDB.read();
-  if (!oneTimeTokenDB.data) return res.status(400).json({ error: 'Token DB missing' });
-  const entry = oneTimeTokenDB.data.tokens.find(t => t.token === token && !t.used);
-  if (!entry) return res.status(400).json({ error: 'Invalid or expired token' });
-  if (Math.floor(Date.now() / 1000) - entry.createdAt > 600) {
-    entry.used = true;
-    await oneTimeTokenDB.write();
-    return res.status(400).json({ error: 'Token expired' });
-  }
-  entry.used = true;
-  await oneTimeTokenDB.write();
-  res.json({ githubId: entry.githubId });
-}));
+
 
 router.get('/github', asyncHandler(async (req: Request, res: Response) => {
   const clientId = process.env['GITHUB_CLIENT_ID'];
