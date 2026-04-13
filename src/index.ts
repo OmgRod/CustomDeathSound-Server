@@ -93,6 +93,8 @@ async function startServer() {
 
   // Serve /verify with a dedicated frontend entrypoint
   app.get('/verify', (req, res) => {
+    const isProduction = process.env["NODE_ENV"] === "production" || /[\\/]build$/.test(__dirname);
+    const scriptSrc = isProduction ? "/frontend/verify.js" : "/src/frontend/verify.ts";
     res.setHeader('Content-Type', 'text/html');
     res.send(`
       <!doctype html>
@@ -102,7 +104,7 @@ async function startServer() {
           <meta name="viewport" content="width=device-width, initial-scale=1.0" />
           <title>Mod Verification</title>
           <meta name="description" content="Verify your mod login." />
-          <script type="module" src="/src/frontend/verify.ts"></script>
+          <script type="module" src="${scriptSrc}"></script>
         </head>
         <body>
           <div id="app"></div>

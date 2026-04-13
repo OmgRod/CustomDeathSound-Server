@@ -3,8 +3,6 @@ import { usersDB } from '../db';
 
 const router = Router();
 
-
-// This route is visited by the user from the mod's link
 router.get('/verify', async (req: Request, res: Response) => {
   const { token } = req.query;
   if (typeof token !== 'string') {
