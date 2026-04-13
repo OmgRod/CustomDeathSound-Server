@@ -2,6 +2,7 @@
 import { Request } from 'express';
 import { ipKeyGenerator, MemoryStore, rateLimit } from 'express-rate-limit';
 
+// Shared store for clearing rate limits
 const sharedRateLimitStore = new MemoryStore();
 
 function normalizeClientIp(rawIp: string | null | undefined) {
@@ -26,10 +27,6 @@ export function getRateLimitKeyFromRequest(req: Request) {
     return ipKeyGenerator(clientIp || req.ip || req.socket.remoteAddress || '');
 }
 
-export function clearRateLimitForRequest(req: Request) {
-    sharedRateLimitStore.resetKey(getRateLimitKeyFromRequest(req));
-}
-
 function rateLimiter(minutes: number, amount: number) {
     const rl = rateLimit({
         windowMs: minutes * 60 * 1000,
@@ -44,6 +41,10 @@ function rateLimiter(minutes: number, amount: number) {
     });
 
     return rl;
+}
+
+export function clearRateLimitForRequest(req: Request) {
+    sharedRateLimitStore.resetKey(getRateLimitKeyFromRequest(req));
 }
 
 export default rateLimiter;

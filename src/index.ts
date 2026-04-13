@@ -91,6 +91,26 @@ async function startServer() {
 
   app.use(express.static(path.join(__dirname, "../public"), staticOptions));
 
+  // Serve /verify with a dedicated frontend entrypoint
+  app.get('/verify', (req, res) => {
+    res.setHeader('Content-Type', 'text/html');
+    res.send(`
+      <!doctype html>
+      <html lang="en">
+        <head>
+          <meta charset="UTF-8" />
+          <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+          <title>Mod Verification</title>
+          <meta name="description" content="Verify your mod login." />
+          <script type="module" src="/src/frontend/verify.ts"></script>
+        </head>
+        <body>
+          <div id="app"></div>
+        </body>
+      </html>
+    `);
+  });
+
   let viteDevServer: import("vite").ViteDevServer | undefined;
   if (!isProduction) {
     const { createServer: createViteServer } = await import("vite");
@@ -119,6 +139,7 @@ async function startServer() {
   const uploadSFXRouter = (await import("./routes/uploadSFX")).default;
   const usersRouter = (await import("./routes/users")).default;
   const authRouter = (await import("./routes/auth")).default;
+  const modVerifyRouter = (await import("./routes/modverify")).default;
 
   app.use("/sfx", getSFXbyIDRouter);
   app.use("/getTopSFXlist", getTopSFXListRouter);
@@ -128,6 +149,7 @@ async function startServer() {
   app.use("/uploadSFX", uploadSFXRouter);
   app.use("/users", usersRouter);
   app.use("/auth", authRouter);
+  app.use("/mod", modVerifyRouter);
 
   const serveFrontend = async (req: Request, res: Response) => {
     try {

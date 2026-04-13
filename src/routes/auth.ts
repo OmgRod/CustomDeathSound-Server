@@ -1,3 +1,4 @@
+import { oneTimeTokenDB, OneTimeToken } from '../db/onetimetoken';
 import { Router, Request, Response } from 'express';
 import https from 'https';
 import crypto from 'crypto';
@@ -6,7 +7,7 @@ import { createSignedSessionToken, parseCookieHeader, serializeCookie, verifySig
 import { upsertGithubUser } from '../utils/userAccounts';
 import { AuthRequest, requireAuth, requireRole } from '../middleware/auth';
 import { usersDB } from '../db';
-import { clearRateLimitForRequest, resolveClientIp } from '../utils/rateLimiter';
+import { resolveClientIp, clearRateLimitForRequest } from '../utils/rateLimiter';
 
 const router = Router();
 const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 30;
@@ -124,6 +125,39 @@ function setCookieHeaders(name: string, value: string, maxAgeSeconds: number) {
   });
 }
 
+router.post('/mod/generate-token', requireAuth, asyncHandler(async (req: AuthRequest, res: Response) => {
+  // TypeScript: requireAuth guarantees req.user is set
+  const user = req.user!;
+  await usersDB.read();
+  if (!usersDB.data) usersDB.data = { users: [] };
+  let dbUser = usersDB.data.users.find(u => u.githubId === user.githubId);
+  if (!dbUser) {
+    dbUser = { githubId: user.githubId, role: 'user' };
+    usersDB.data.users.push(dbUser);
+  }
+  // Always generate a new modVerificationCode and persist it
+  (dbUser as any).modVerificationCode = crypto.randomBytes(24).toString('hex');
+  await usersDB.write();
+  res.json({ token: (dbUser as any).modVerificationCode });
+}));
+
+router.post('/mod/verify-token', asyncHandler(async (req: Request, res: Response) => {
+  const { token } = req.body as { token?: string };
+  if (!token) return res.status(400).json({ error: 'Missing token' });
+  await oneTimeTokenDB.read();
+  if (!oneTimeTokenDB.data) return res.status(400).json({ error: 'Token DB missing' });
+  const entry = oneTimeTokenDB.data.tokens.find(t => t.token === token && !t.used);
+  if (!entry) return res.status(400).json({ error: 'Invalid or expired token' });
+  if (Math.floor(Date.now() / 1000) - entry.createdAt > 600) {
+    entry.used = true;
+    await oneTimeTokenDB.write();
+    return res.status(400).json({ error: 'Token expired' });
+  }
+  entry.used = true;
+  await oneTimeTokenDB.write();
+  res.json({ githubId: entry.githubId });
+}));
+
 router.get('/github', asyncHandler(async (req: Request, res: Response) => {
   const clientId = process.env['GITHUB_CLIENT_ID'];
   if (!clientId) {
@@ -131,6 +165,7 @@ router.get('/github', asyncHandler(async (req: Request, res: Response) => {
   }
 
   const state = crypto.randomBytes(16).toString('hex');
+  const redirectParam = typeof req.query.redirect === 'string' ? req.query.redirect : '';
   const redirectUri = `${getBaseUrl(req)}/auth/github/callback`;
   const authorizeUrl = new URL('https://github.com/login/oauth/authorize');
   authorizeUrl.searchParams.set('client_id', clientId);
@@ -138,9 +173,11 @@ router.get('/github', asyncHandler(async (req: Request, res: Response) => {
   authorizeUrl.searchParams.set('scope', 'read:user');
   authorizeUrl.searchParams.set('state', state);
 
+  // Store intended redirect in a cookie
   res.setHeader('Set-Cookie', [
     setCookieHeaders('cds_oauth_state', state, OAUTH_STATE_MAX_AGE_SECONDS),
-  ]);
+    redirectParam ? setCookieHeaders('cds_oauth_redirect', redirectParam, OAUTH_STATE_MAX_AGE_SECONDS) : ''
+  ].filter(Boolean));
   res.redirect(authorizeUrl.toString());
 }));
 
@@ -148,6 +185,7 @@ router.get('/github/callback', asyncHandler(async (req: Request, res: Response) 
   const { code, state } = req.query;
   const cookies = parseCookieHeader(req.headers.cookie);
   const expectedState = cookies['cds_oauth_state'];
+  const redirectAfter = cookies['cds_oauth_redirect'] || '/';
 
   if (typeof code !== 'string' || typeof state !== 'string' || !expectedState || state !== expectedState) {
     return res.status(400).send('Invalid GitHub login response');
@@ -171,9 +209,10 @@ router.get('/github/callback', asyncHandler(async (req: Request, res: Response) 
   res.setHeader('Set-Cookie', [
     setCookieHeaders('cds_session', sessionToken, SESSION_MAX_AGE_SECONDS),
     serializeCookie('cds_oauth_state', '', { httpOnly: true, maxAge: 0, path: '/', sameSite: 'Lax' }),
+    serializeCookie('cds_oauth_redirect', '', { httpOnly: true, maxAge: 0, path: '/', sameSite: 'Lax' }),
   ]);
 
-  res.redirect('/');
+  res.redirect(redirectAfter);
 }));
 
 router.get('/me', asyncHandler(async (req: AuthRequest, res: Response) => {
@@ -225,6 +264,7 @@ router.get('/admin/network', requireAuth, requireRole(['admin']), asyncHandler(a
   const ip = resolveClientIp(req);
   return res.status(200).json({ ip });
 }));
+
 
 router.post('/admin/network/reset-rate-limit', requireAuth, requireRole(['admin']), asyncHandler(async (req: AuthRequest, res: Response) => {
   const ip = resolveClientIp(req);
