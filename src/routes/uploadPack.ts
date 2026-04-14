@@ -10,8 +10,7 @@ const router = Router();
 router.post(
   '/',
   rateLimiter(15, 100),
-  requireAuth,
-  requireRole(['admin']),
+  require('../middleware/adminAuth').requireAdminAuth,
   asyncHandler(async (req: AuthRequest, res: Response) => {
     console.log('Reading Pack DB...');
     await packsDB.read();

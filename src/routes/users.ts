@@ -55,8 +55,7 @@ async function fetchGithubProfileById(githubId: string) {
 // List all users (admin only)
 router.get(
   '/',
-  requireAuth,
-  requireRole(['admin']),
+  require('../middleware/adminAuth').requireAdminAuth,
   asyncHandler(async (req: AuthRequest, res: Response) => {
     await usersDB.read();
     const users = usersDB.data?.users || [];
@@ -91,8 +90,7 @@ router.get(
 // Delete a user (admin only)
 router.delete(
   '/:userId',
-  requireAuth,
-  requireRole(['admin']),
+  require('../middleware/adminAuth').requireAdminAuth,
   asyncHandler(async (req: AuthRequest, res: Response) => {
     await usersDB.read();
 

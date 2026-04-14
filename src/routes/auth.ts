@@ -246,13 +246,15 @@ router.post('/logout', asyncHandler(async (_req: Request, res: Response) => {
   res.status(200).json({ message: 'Logged out' });
 }));
 
-router.get('/admin/network', requireAuth, requireRole(['admin']), asyncHandler(async (req: AuthRequest, res: Response) => {
+import { requireAdminAuth } from '../middleware/adminAuth';
+
+router.get('/admin/network', requireAdminAuth, asyncHandler(async (req: AuthRequest, res: Response) => {
   const ip = resolveClientIp(req);
   return res.status(200).json({ ip });
 }));
 
 
-router.post('/admin/network/reset-rate-limit', requireAuth, requireRole(['admin']), asyncHandler(async (req: AuthRequest, res: Response) => {
+router.post('/admin/network/reset-rate-limit', requireAdminAuth, asyncHandler(async (req: AuthRequest, res: Response) => {
   const ip = resolveClientIp(req);
   clearRateLimitForRequest(req);
   return res.status(200).json({ message: 'Rate limit reset for this IP.', ip });
