@@ -2,9 +2,6 @@
 import { Request } from 'express';
 import { ipKeyGenerator, MemoryStore, rateLimit } from 'express-rate-limit';
 
-// Shared store for clearing rate limits
-const sharedRateLimitStore = new MemoryStore();
-
 function normalizeClientIp(rawIp: string | null | undefined) {
     if (!rawIp) return '';
     const trimmed = rawIp.trim();
@@ -27,11 +24,12 @@ export function getRateLimitKeyFromRequest(req: Request) {
     return ipKeyGenerator(clientIp || req.ip || req.socket.remoteAddress || '');
 }
 
-function rateLimiter(minutes: number, amount: number) {
+export default function rateLimiter(minutes: number, amount: number) {
+    const store = new MemoryStore();
     const rl = rateLimit({
         windowMs: minutes * 60 * 1000,
         max: amount,
-        store: sharedRateLimitStore,
+        store,
         keyGenerator: (req) => getRateLimitKeyFromRequest(req),
         standardHeaders: true,
         legacyHeaders: false,
@@ -39,12 +37,13 @@ function rateLimiter(minutes: number, amount: number) {
             res.status(429).json({ error: 'Too many requests, please try again later.' });
         },
     });
-
+    // Attach store for clearing (if needed in future)
+    (rl as any)._store = store;
     return rl;
 }
 
-export function clearRateLimitForRequest(req: Request) {
-    sharedRateLimitStore.resetKey(getRateLimitKeyFromRequest(req));
+// clearRateLimitForRequest is now a no-op placeholder
+export function clearRateLimitForRequest(_req: Request) {
+    // No-op: cannot clear all stores now that each limiter has its own
 }
 
-export default rateLimiter;

@@ -91,7 +91,6 @@ async function startServer() {
 
   app.use(express.static(path.join(__dirname, "../public"), staticOptions));
 
-  // Serve /verify with a dedicated frontend entrypoint
   app.get('/verify', (req, res) => {
     const isProduction = process.env["NODE_ENV"] === "production" || /[\\/]build$/.test(__dirname);
     const scriptSrc = isProduction ? "/frontend/verify.js" : "/src/frontend/verify.ts";
@@ -105,6 +104,82 @@ async function startServer() {
           <title>Mod Verification</title>
           <meta name="description" content="Verify your mod login." />
           <script type="module" src="${scriptSrc}"></script>
+          <style>
+            html, body {
+              background: linear-gradient(180deg, #171a20, #111318) !important;
+              color: #e9edf2 !important;
+              min-height: 100vh;
+              margin: 0;
+            }
+            .verify-shell {
+              max-width: 480px;
+              margin: 60px auto 0 auto;
+              background: #181a20;
+              border-radius: 12px;
+              box-shadow: 0 2px 16px #0008;
+              padding: 2.5rem 2rem 2rem 2rem;
+              color: #fff;
+              font-family: 'Segoe UI', 'Arial', sans-serif;
+            }
+            .verify-shell h2 {
+              font-size: 2rem;
+              margin-bottom: 1.1rem;
+              font-weight: 700;
+              letter-spacing: 0.01em;
+              text-shadow: 0 2px 8px #000a;
+            }
+            .verify-shell p {
+              margin: 0.5rem 0 1.2rem 0;
+              font-size: 1.1rem;
+              color: #e0e0e0;
+            }
+            .verify-code-box {
+              background: #23263a;
+              color: #00eaff;
+              font-family: 'JetBrains Mono', 'Fira Mono', 'Consolas', monospace;
+              font-size: 1.15rem;
+              padding: 1.1rem 1.2rem;
+              border-radius: 8px;
+              margin: 0.5rem 0 1.2rem 0;
+              word-break: break-all;
+              cursor: pointer;
+              border: 2px solid #00eaff44;
+              transition: background 0.15s, border 0.15s;
+              user-select: all;
+              text-align: center;
+              position: relative;
+            }
+            .verify-code-box.copied {
+              background: #1e2e1e;
+              color: #7fff7f;
+              border-color: #7fff7f99;
+            }
+            .verify-copy-hint {
+              font-size: 0.95rem;
+              color: #aaa;
+              margin-bottom: 0.5rem;
+              text-align: center;
+            }
+            .verify-shell small {
+              color: #888;
+              font-size: 0.95rem;
+            }
+            .verify-shell button {
+              background: #00eaff;
+              color: #181a20;
+              border: none;
+              border-radius: 6px;
+              padding: 0.7rem 1.3rem;
+              font-size: 1.1rem;
+              font-weight: 600;
+              cursor: pointer;
+              margin-top: 1.2rem;
+              transition: background 0.15s;
+            }
+            .verify-shell button:hover {
+              background: #00b3c6;
+            }
+          </style>
         </head>
         <body>
           <div id="app"></div>
