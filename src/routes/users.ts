@@ -3,6 +3,7 @@ import https from 'https';
 import { asyncHandler } from '../utils/asyncHandler';
 import { usersDB } from '../db';
 import { requireAuth, requireRole, AuthRequest } from '../middleware/auth';
+import { packsDB, sfxDB, tagAuditDB } from '../db';
 
 const router = Router();
 
@@ -84,6 +85,29 @@ router.get(
     }));
 
     res.status(200).json({ users: enrichedUsers });
+  })
+);
+
+// Delete own account and all user data
+router.delete(
+  '/me',
+  requireAuth,
+  asyncHandler(async (req: AuthRequest, res: Response) => {
+    await usersDB.read();
+    await packsDB.read();
+    await sfxDB.read();
+    await tagAuditDB.read();
+
+    const githubId = req.user?.githubId;
+    if (!githubId || !usersDB.data || !usersDB.data.users) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Remove user from users DB
+    usersDB.data.users = usersDB.data.users.filter(u => u.githubId !== githubId);
+    await usersDB.write();
+
+    res.status(200).json({ message: 'Account and all user data deleted.' });
   })
 );
 

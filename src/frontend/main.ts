@@ -345,6 +345,7 @@ function renderAuthPanel() {
       <div class="auth-actions">
         <button id="refreshAccountTokenBtn" type="button" class="button--ghost">Refresh Account Token</button>
         <button id="logoutBtn" type="button" class="button--ghost">Logout</button>
+        <button id="deleteAccountBtn" type="button" style="background: var(--danger); color: #fff; border-color: var(--danger);">Delete Account</button>
       </div>
       <p class="meta">${currentUser.role === 'admin' ? 'Admin tools are enabled.' : 'Read-only access only.'}</p>
     </div>
@@ -362,6 +363,22 @@ function renderAuthPanel() {
       alert('Your account token has been refreshed. You can view the new token on the /verify page.');
     } catch {
       alert('Failed to refresh account token.');
+    }
+  });
+
+  document.querySelector<HTMLButtonElement>('#deleteAccountBtn')?.addEventListener('click', async () => {
+    if (!window.confirm('Are you sure you want to delete your account? This will permanently erase ALL your data (sounds, packs, everything) and cannot be undone.')) return;
+    try {
+      const res = await fetch('/users/me', { method: 'DELETE' });
+      if (!res.ok) {
+        const payload = await res.json().catch(() => null);
+        showToast(payload?.error || 'Failed to delete account.', 'error');
+        return;
+      }
+      showToast('Account deleted. Goodbye!', 'success');
+      await logout();
+    } catch {
+      showToast('Failed to delete account.', 'error');
     }
   });
 }
