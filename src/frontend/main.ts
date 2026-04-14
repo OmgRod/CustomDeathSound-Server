@@ -343,7 +343,7 @@ function renderAuthPanel() {
       <h2>${escapeHtml(currentUser.username)}</h2>
       <p class="meta">GitHub: ${escapeHtml(currentUser.githubUsername)} · ${currentUser.role.toUpperCase()}</p>
       <div class="auth-actions">
-        <button id="refreshAccountCodeBtn" type="button" class="button--ghost">Refresh Account Code</button>
+        <button id="refreshAccountTokenBtn" type="button" class="button--ghost">Refresh Account Token</button>
         <button id="logoutBtn" type="button" class="button--ghost">Logout</button>
       </div>
       <p class="meta">${currentUser.role === 'admin' ? 'Admin tools are enabled.' : 'Read-only access only.'}</p>
@@ -354,14 +354,14 @@ function renderAuthPanel() {
     void logout();
   });
 
-  document.querySelector<HTMLButtonElement>('#refreshAccountCodeBtn')?.addEventListener('click', async () => {
-    if (!window.confirm('Are you sure you want to refresh your account code? This will invalidate the old code and generate a new one.')) return;
+  document.querySelector<HTMLButtonElement>('#refreshAccountTokenBtn')?.addEventListener('click', async () => {
+    if (!window.confirm('Are you sure you want to refresh your account token? This will invalidate the old token and generate a new one.')) return;
     try {
       const res = await fetch('/auth/mod/generate-token', { method: 'POST' });
-      if (!res.ok) throw new Error('Failed to refresh code');
-      alert('Your account code has been refreshed. You can view the new code on the /verify page.');
+      if (!res.ok) throw new Error('Failed to refresh token');
+      alert('Your account token has been refreshed. You can view the new token on the /verify page.');
     } catch {
-      alert('Failed to refresh account code.');
+      alert('Failed to refresh account token.');
     }
   });
 }

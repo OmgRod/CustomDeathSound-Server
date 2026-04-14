@@ -1,3 +1,4 @@
+
 import { Router, Request, Response } from 'express';
 import https from 'https';
 import crypto from 'crypto';
@@ -11,6 +12,19 @@ import { resolveClientIp, clearRateLimitForRequest } from '../utils/rateLimiter'
 const router = Router();
 const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 30;
 const OAUTH_STATE_MAX_AGE_SECONDS = 10 * 60;
+
+router.get('/mod/token', requireAuth, asyncHandler(async (req: AuthRequest, res: Response) => {
+  const user = req.user!;
+  await usersDB.read();
+  if (!usersDB.data) usersDB.data = { users: [] };
+  let dbUser = usersDB.data.users.find(u => u.githubId === user.githubId);
+  if (!dbUser) {
+    dbUser = { githubId: user.githubId, role: 'user' };
+    usersDB.data.users.push(dbUser);
+    await usersDB.write();
+  }
+  res.json({ token: (dbUser as any).modVerificationCode || null });
+}));
 
 type GitHubProfile = {
   id: number;

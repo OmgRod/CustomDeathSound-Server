@@ -112,17 +112,18 @@ async function renderVerifyPage() {
     return;
   }
 
-  // Logged in, request a verification code
-  content.textContent = 'Generating verification code...';
+  // Logged in, request the current account token (does not generate a new one)
+  content.textContent = 'Loading account token...';
   try {
-    const res = await fetch('/auth/mod/generate-token', { method: 'POST' });
-    if (!res.ok) throw new Error('Failed to get code');
+    const res = await fetch('/auth/mod/token');
+    if (!res.ok) throw new Error('Failed to get token');
     const data = await res.json();
+    if (!data.token) throw new Error('No token found');
     content.innerHTML = `
-      <div class="verify-copy-hint">Click the code to copy it to your clipboard</div>
+      <div class="verify-copy-hint">Click the token to copy it to your clipboard</div>
       <div class="verify-code-box" id="verifyCodeBox">${data.token}</div>
-      <p>Click the code above to copy it and paste it in GD.</p>
-      <p><small>This code is valid until you decide to refresh it in the homepage. Do not share this code with anyone else.</small></p>
+      <p>Click the token above to copy it and paste it in GD.</p>
+      <p><small>This token is valid until you decide to refresh it in the homepage. Do not share this token with anyone else.</small></p>
     `;
     const codeBox = document.getElementById('verifyCodeBox');
     if (codeBox) {
@@ -141,7 +142,7 @@ async function renderVerifyPage() {
       });
     }
   } catch {
-    content.textContent = 'Failed to generate verification code.';
+    content.textContent = 'Failed to load account token.';
   }
 }
 
