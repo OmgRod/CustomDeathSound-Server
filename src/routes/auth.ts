@@ -1,4 +1,3 @@
-
 import { Router, Request, Response } from 'express';
 import https from 'https';
 import crypto from 'crypto';
@@ -270,6 +269,35 @@ router.post('/admin/network/reset-rate-limit', requireAdminAuth, asyncHandler(as
   const ip = resolveClientIp(req);
   clearRateLimitForRequest(req);
   return res.status(200).json({ message: 'Rate limit reset for this IP.', ip });
+}));
+
+// Returns { isAdmin: true/false } for the current user (session or ?token=...)
+router.get('/is-admin', asyncHandler(async (req: Request, res: Response) => {
+  let githubId: string | undefined;
+  let isAdmin = false;
+
+  // 1. Try session
+  const cookies = parseCookieHeader(req.headers.cookie);
+  const sessionToken = cookies['cds_session'];
+  const sessionSecret = process.env['SESSION_SECRET'] || 'dev-session-secret';
+  const session = verifySignedSessionToken(sessionToken, sessionSecret);
+  if (session) githubId = session.userId;
+
+  // 2. Try token (query or header)
+  if (!githubId) {
+    const token = (req.query.token as string) || req.headers['x-account-token'];
+    await usersDB.read();
+    const user = usersDB.data?.users.find(u => u.modVerificationCode === token);
+    if (user) githubId = user.githubId;
+  }
+
+  if (githubId) {
+    await usersDB.read();
+    const user = usersDB.data?.users.find(u => u.githubId === githubId);
+    if (user && user.role === 'admin') isAdmin = true;
+  }
+
+  res.json({ isAdmin });
 }));
 
 export default router;
