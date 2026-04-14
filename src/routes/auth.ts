@@ -134,11 +134,9 @@ router.post('/mod/generate-token', requireAuth, asyncHandler(async (req: AuthReq
     dbUser = { githubId: user.githubId, role: 'user' };
     usersDB.data.users.push(dbUser);
   }
-  // Only generate a new modVerificationCode if one does not exist
-  if (!(dbUser as any).modVerificationCode) {
-    (dbUser as any).modVerificationCode = crypto.randomBytes(24).toString('hex');
-    await usersDB.write();
-  }
+  // Always generate a new modVerificationCode when this endpoint is called
+  (dbUser as any).modVerificationCode = crypto.randomBytes(24).toString('hex');
+  await usersDB.write();
   res.json({ token: (dbUser as any).modVerificationCode });
 }));
 
